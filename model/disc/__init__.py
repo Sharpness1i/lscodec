@@ -1,0 +1,2 @@
+from .discriminators import MultiPeriodDiscriminator, MultiResolutionDiscriminator
+from .discriminator_dac import DACDiscriminator

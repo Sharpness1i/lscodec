@@ -1,0 +1,24 @@
+{
+    // 使用 IntelliSense 了解相关属性。 
+    // 悬停以查看现有属性的描述。
+    // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+    {
+      "name": "Attach to 5678",
+      "type": "python",
+      "request": "attach",
+      "port": 5678,
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}"
+    },
+        {
+      "name": "Attach to 5677",
+      "type": "python",
+      "request": "attach",
+      "port": 5677,
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}"
+    },
+    ]
+}

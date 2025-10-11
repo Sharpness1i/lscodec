@@ -1,0 +1,174 @@
+# gpu config
+accelerator: gpu
+num_nodes: 2
+devices: [0,1,2,3,4,5,6,7]
+
+# log config
+log_dir: ./log
+resume_from_last_ckpt: true
+resume: /primus_biz_workspace/yanhaoyin.yhy/project/codec/codec_16k_hubert_dual_25hz_20250827/log/ckpts/version_3/epoch=27-last.ckpt # if want to resume, specify ckpt path
+pretrained_pt_path: /primus_biz_workspace/yanhaoyin.yhy/project/codec/codec_16k_hubert_dual_25hz_20250827/pretrained.pt
+
+# inference
+ckpt_path: null
+
+# dataset config
+dataset_config:
+  train_kwargs:
+    batch_size: 24
+    cut_duration: [5.0, 5.0]  # 5.0 seconds
+    num_workers: 16  # dataloader workers
+    prefetch: 24
+    samples_per_epoch: 400000
+    domain_weights_dict:
+      speech: 2
+      music: 1
+      audio: 1
+    audio_scp_path:
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/audio/AudioSet/audioset_train.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/audio/WavCaps/wavcaps.scp
+    music_scp_path:
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/music/free-music-archive-full/fma-f.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/music/musdb18hq/musdb18hq_train.scp
+    speech_scp_base_dir: /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox
+    speech_scp_path:
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/librispeech.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/emilia_en_0000_0009.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/emilia_en_0010_0019.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/emilia_en_0020_0029.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/emilia_en_0030_0039.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/emilia_en_0040_0049.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/emilia_en_0050_0059.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/emilia_en_0060_0069.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/emilia_en_0070_0083.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/gigaspeech_0000_0009.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/gigaspeech_0010_0019.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/gigaspeech_0020_0029.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/gigaspeech_0030_0039.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/gigaspeech_0040_0049.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/gigaspeech_0050_0059.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/gigaspeech_0060_0066.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/mls_english_0000_0009.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/mls_english_0010_0019.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/mls_english_0020_0029.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/mls_english_0030_0039.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/mls_english_0040_0049.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/mls_english_0050_0063.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/emilia_zh_0000_0009.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/emilia_zh_0010_0019.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/emilia_zh_0020_0029.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/emilia_zh_0030_0039.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/emilia_zh_0040_0049.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/emilia_zh_0050_0059.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/emilia_zh_0060_0069.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/emilia_zh_0070_0079.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/emilia_zh_0080_0089.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/emilia_zh_0090_0099.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/emilia_zh_0100_0109.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/emilia_zh_0110_0119.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/emilia_zh_0120_0129.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/emilia_zh_0130_0139.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/emilia_zh_0140_0149.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/emilia_zh_0150_0156.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/wenetspeech4tts_0000_0009.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/wenetspeech4tts_0010_0019.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/wenetspeech4tts_0020_0029.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/wenetspeech4tts_0030_0039.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/wenetspeech4tts_0040_0049.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/wenetspeech4tts_0050_0059.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/wenetspeech4tts_0060_0069.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/wenetspeech4tts_0070_0079.scp
+      - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/wenetspeech4tts_0080_0088.scp
+  # val_kwargs:
+  #   batch_size: 1
+  #   cut_duration: null
+  #   num_workers: 1
+  #   prefetch: 1
+  #   samples_per_epoch: 1000
+  #   speech_scp_base_dir: /mnt/nas1/dataset/voxbox
+  #   speech_scp_path:
+  #     - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/commonvoice_cn.scp
+  #     - /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/voxbox/wav_scp/commonvoice_en.scp
+  val_kwargs:
+    batch_size: 1
+    num_workers: 1
+    prefetch: 1
+    cut_duration: [5.0, 5.0]  # 5.0 seconds
+    samples_per_epoch: 1000
+    speech_scp_path: /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/librispeech/test_clean.scp
+    music_scp_path: /primus_datasets/primus_data/unified_llm_audio_OOs78D/music/musdb18hq/musdb18hq_test.scp
+    audio_scp_path: /primus_datasets/primus_data/unified_llm_audio_OOs78D/audio/AudioSet/audioset_eval.scp
+  test_kwargs:
+    batch_size: 1
+    num_workers: 1
+    prefetch: 1
+    domain: speech
+    wav_scp_path: /primus_datasets/primus_data/unified_llm_audio_OOs78D/speech/librispeech/test_clean.scp
+
+
+
+# training config
+# max_epochs: 200
+# val_check_interval: 0.5  # validate every 0.5 epochs
+
+max_steps: 1_200_000  # 1.2M/2 steps
+val_check_interval: 2_000  # validate every 2k steps
+check_val_every_n_epoch: null  # validate based on the total training batches
+limit_val_batches: 600  # 只用 600 个batch来验证
+
+
+gradient_clip_val: 5.0
+opt_gen:
+  lr: 2.0e-4
+opt_disc:
+  lr: 2.0e-4
+sch:
+  warmup_steps: 0
+perceptual_start_step: 500_000
+
+encoder_config:
+  channels: 1
+  dimension: 512
+  n_filters: 32
+  n_residual_layers: 1
+  ratios: [2, 4, 5, 8]
+  causal: false
+decoder_config:
+  input_channels: 512
+  dim: 768
+  intermediate_dim: 2304
+  convnext_layers: 12
+  n_fft: 1280
+  hop_length: 320  # np.prod(ratios)
+  causal: false
+# quantizer_config:
+#   n_e: 4096
+#   e_dim: 512
+#   legacy: true
+# quantizer_config:
+#   num_quantizers: 1
+#   dim: 512
+#   codebook_size: 8192
+#   codebook_dim: 8
+#   threshold_ema_dead_code: 2
+#   commitment: 0.25
+#   weight_init: false
+#   full_commit_loss: false
+quantizer_config:
+  dim: 512
+  codebook_size: 4096
+  num_quantizers: 1
+  decay: 0.99
+  kmeans_init: true
+  kmeans_iters: 200
+  threshold_ema_dead_code: 2
+
+
+contrasive_criterion_config:
+  encoder_embed_dim: 512
+  final_dim: 256
+  num_negatives: 30
+  cross_sample_negatives: 0
+  logit_temp: 0.1
+
+
