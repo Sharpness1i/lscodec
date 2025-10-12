@@ -10,24 +10,15 @@ from model import Model
 from dataloader import DataModule
 import os
 DEBUG_MODE = os.environ.get("DEBUG_MODE", "false").lower() in ("1", "true", "yes")
-
-
 if DEBUG_MODE:
     import debugpy; debugpy.listen(('0.0.0.0', 5678)); print('I am waiting for you');debugpy.wait_for_client();debugpy.breakpoint();
-
 def main(args):
-
-    
-
-    pl.seed_everything(3407)
-    
+    pl.seed_everything(3407)    
     with open(args.config, 'r') as f:
         config = yaml.safe_load(f)
-    
     logger = TensorBoardLogger(save_dir=config['log_dir'], name='tensorboard')
     ckpt_dir = Path(config['log_dir']) / f'ckpts/version_{logger.version}' #change your folder, where to save files
     ckpt_dir.mkdir(parents=True, exist_ok=True)
-    
     config['ckpt_dir'] = ckpt_dir
     subprocess.run(['cp', 'conf/config.yaml', ckpt_dir])
     

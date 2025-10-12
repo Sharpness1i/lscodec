@@ -47,7 +47,7 @@ class ResidualVectorQuantizer(BaseQuantizer):
         dimension: int = 128,
         input_dimension: tp.Optional[int] = None,
         output_dimension: tp.Optional[int] = None,
-        n_q: int = 8,
+        n_q: int = 16,
         q_dropout: bool = False,
         no_quantization_rate: float = 0.0,
         bins: int = 1024,
@@ -109,12 +109,19 @@ class ResidualVectorQuantizer(BaseQuantizer):
                 - `penalty` (torch.Tensor): Commitment loss.
                 - `metrics` (dict): RVQ metrics, in particular rate of dead code replacement, and entropy.
         """
+        
+
         n_q = self.n_q
         x = self.input_proj(x)
         if self.training and self.q_dropout:
             n_q = self.rng_dropout.randint(1, self.n_q)
         bw_per_q = math.log2(self.bins) * frame_rate / 1000
         quantized, codes, commit_loss, metrics = self.vq(x, n_q=n_q)
+        
+        #print("[DBG] no_quantization_rate =", self.no_quantization_rate)
+        # print("[DBG] mask unique:", mask.unique())
+        #print("[DBG] max|x - quantized|:", (x - quantized).abs().max().item())
+        
         B, _, _ = quantized.shape
         if self.training and self.no_quantization_rate > 0:
             mask = (torch.rand(B, 1, 1, device=x.device) <= self.no_quantization_rate).float()
@@ -177,11 +184,11 @@ class SplitResidualVectorQuantizer(BaseQuantizer):
     def __init__(
         self,
         *,
-        n_q: int = 8,
+        n_q: int = 16,
         n_q_semantic: int = 1,
         **kwargs,
     ):
-        super().__init__()
+        super().__init__()  # 确保n_q = 16
         assert n_q > n_q_semantic, (
             f"Number of quantizers {n_q} must be larger "
             f"than the number of semantic quantizers {n_q_semantic}."

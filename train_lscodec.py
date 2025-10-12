@@ -29,7 +29,7 @@ def main(args):
     subprocess.run(['cp', 'conf/config.yaml', ckpt_dir])
     subprocess.run(['cp', 'train.py', ckpt_dir])
     
-    model = loaders.get_mimi(filename=None, device=None)
+    model = loaders.get_mimi(filename=None, device=None, num_codebooks=16)
     model.train()
     
     model.teacher_feature_extractor.eval()  

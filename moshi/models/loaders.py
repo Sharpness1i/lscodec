@@ -62,7 +62,7 @@ _quantizer_kwargs = {
     "input_dimension": _seanet_kwargs["dimension"],
     "output_dimension": _seanet_kwargs["dimension"],
     "q_dropout": True,
-    "no_quantization_rate": 0.5
+    "no_quantization_rate": 0.0
 }
 _transformer_kwargs = {
     "d_model": _seanet_kwargs["dimension"],
@@ -308,7 +308,7 @@ def get_mimi(
         encoder_transformer=encoder_transformer,
         decoder_transformer=decoder_transformer,
     ).to(device=device)
-    model.eval()
+    #model.eval()
     if filename is not None:
         if _is_safetensors(filename):
             load_model(model, filename, device=str(device))

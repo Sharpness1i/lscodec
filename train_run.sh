@@ -10,6 +10,7 @@ export HUBERT_DIR=/root/code/lscodec/bosonai_hubert_base
 export WAVLM_DIR=/mnt/wavlm_large
 
 export CUDA_VISIBLE_DEVICES=1
+export DEBUG_MODE=True
 
 torchrun --nproc_per_node=1 --nnodes=1 train.py --config /root/code/lscodec/conf/config.yaml
 
