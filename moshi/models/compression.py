@@ -166,7 +166,7 @@ class MimiModel(pl.LightningModule, CompressionModel[_MimiState]):
         self.mel_loss_lambdas = cfg.get('mel_loss_lambdas')
         self.commitment_loss_lambda = cfg.get('commitment_loss_lambda')
         self.recon_loss_lambda = cfg.get('recon_loss_lambda')
- 
+        self.use_perceptual_loss = False
         
         if freeze_encoder:
             for p in self.encoder.parameters():
@@ -389,8 +389,43 @@ class MimiModel(pl.LightningModule, CompressionModel[_MimiState]):
         
         return recon , loss, q_res.distill_loss
     
+    def get_last_layer(self):
+        # 1) 倒序遍历 decoder 的模块，优先取标准末层
+        for m in reversed(list(self.decoder.modules())):
+            if isinstance(m, (nn.Conv1d, nn.ConvTranspose1d, nn.Linear)):
+                w = getattr(m, 'weight', None)
+                if w is not None and w.requires_grad:
+                    return w
+        # 2) 回退：decoder 里最后一个可训练参数
+        for p in reversed(list(self.decoder.parameters())):
+            if p.requires_grad:
+                return p
+        raise RuntimeError("decoder 中没有可训练参数，无法计算自适应权重")
+    
+    def calculate_adaptive_weight(self, recon_loss, adv_loss, last_layer):
+        recon_grads = torch.autograd.grad(recon_loss, last_layer, retain_graph=True)[0]
+        adv_grads = torch.autograd.grad(adv_loss, last_layer, retain_graph=True)[0]
+
+        d_weight = torch.norm(recon_grads) / (torch.norm(adv_grads) + 1e-4)
+        d_weight = torch.clamp(d_weight, 0.0, 1.0).detach()
+        return d_weight
+    
+    def cal_perceptual_loss(self, recon, wav):
+        # b,t
+        with torch.no_grad():
+            gt_perceptual = self.feature_extractor(wav, output_hidden_states=True).hidden_states
+        gen_perceptual = self.feature_extractor(recon, output_hidden_states=True).hidden_states
+
+        gt_perceptual_se = torch.stack(gt_perceptual, dim=1)  # b,l,t,d
+        gen_perceptual_se = torch.stack(gen_perceptual, dim=1)  # b,l,t,d
+        
+        scale = 1 / (gt_perceptual_se.abs().mean([-2, -1]) + 1e-5)  # b,l
+        perceptual_loss = (gt_perceptual_se - gen_perceptual_se).abs().mean([-2, -1]) * scale
+        perceptual_loss = perceptual_loss.mean()
+
+        return perceptual_loss
+    
     def training_step(self,batch,batch_idx):
-        total_mel_error = 0
         wav_16k, wav_24k, lengths_16k, lengths_24k = batch
         # teacher model input wav has to be 16k
         teacher_feature = self.teacher_feature_extractor(wav_16k).last_hidden_state.detach() # (b,t,1024)
@@ -401,11 +436,9 @@ class MimiModel(pl.LightningModule, CompressionModel[_MimiState]):
         frame_size = self.frame_size 
         if state is None:
             wav = pad_for_conv1d(wav_24k, frame_size, frame_size)
-        
         ######################## discriminator ##############################
         opt_gen, opt_disc = self.optimizers()
         sch_gen, sch_disc = self.lr_schedulers()
-
         # discriminator step
         with torch.no_grad():
             x_hat, _, _ = self(wav,teacher_feature=teacher_feature)
@@ -426,7 +459,7 @@ class MimiModel(pl.LightningModule, CompressionModel[_MimiState]):
 
         opt_disc.zero_grad()
         self.manual_backward(loss_disc)
-        self.clip_gradients(opt_disc, gradient_clip_val=self.config['gradient_clip_val'], gradient_clip_algorithm='norm')
+        self.clip_gradients(opt_disc, gradient_clip_val=5.0, gradient_clip_algorithm='norm')
         opt_disc.step()
         sch_disc.step()
         self.log("train/loss_disc", float(loss_disc), on_step=True, on_epoch=True, prog_bar=True)
@@ -434,12 +467,11 @@ class MimiModel(pl.LightningModule, CompressionModel[_MimiState]):
         self.log("train/loss_mrd", float(loss_mrd), on_step=True, on_epoch=True)
         self.log("train/loss_dac", float(loss_dac), on_step=True, on_epoch=True)
         
-        
         ######################### generator ####################################################
         x_hat, commit_loss, distill_loss = self(wav,teacher_feature=teacher_feature)
-             
-        mel_error = mel_loss(wav, x_hat, **self.mel_loss_kwargs_list[0]).item()
-        total_mel_error += mel_error
+        distill_loss = distill_loss.mean()
+        # mel_error = mel_loss(wav, x_hat, **self.mel_loss_kwargs_list[0]).item()
+        # total_mel_error += mel_error
          
         loss_dac_1, loss_dac_2 = self.dacdiscriminator.generator_loss(x_hat, wav)  # 完全没有平均
         _, gen_score_mpd, fmap_rs_mpd, fmap_gs_mpd = self.multiperioddisc(
@@ -467,25 +499,21 @@ class MimiModel(pl.LightningModule, CompressionModel[_MimiState]):
                 perceptual_loss,
                 self.get_last_layer(),
             )
-            # p_weight = 1.0
         else:
             perceptual_loss = 0.0
             p_weight = 0.0
-
         
         d_weight = self.calculate_adaptive_weight(
             loss_mel * 45,
             loss_adv + loss_fm,
             self.get_last_layer(),
         )
-        # d_weight = 1.0
-
         loss_gen = d_weight * (loss_adv + loss_fm) + 45 * loss_mel + commit_loss + distill_loss  + p_weight * perceptual_loss
-        print(commit_loss)
+        # print(commit_loss)
         
         opt_gen.zero_grad()
         self.manual_backward(loss_gen)
-        self.clip_gradients(opt_gen, gradient_clip_val=self.config['gradient_clip_val'], gradient_clip_algorithm='norm')
+        self.clip_gradients(opt_gen, gradient_clip_val=5.0, gradient_clip_algorithm='norm')
         opt_gen.step()
         sch_gen.step()
         
@@ -499,9 +527,8 @@ class MimiModel(pl.LightningModule, CompressionModel[_MimiState]):
         self.log("train/d_weight", float(d_weight), on_step=True, on_epoch=True)
         self.log("train/p_weight", float(p_weight), on_step=True, on_epoch=True)
 
-        self.current_training_step += 1
 
-        pass
+
 
     def _encode_to_unquantized_latent(self, x: torch.Tensor) -> torch.Tensor:
         """Projects a batch of waveforms to unquantized latent space.

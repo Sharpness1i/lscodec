@@ -35,7 +35,6 @@ class Model(pl.LightningModule):
         self.multiresdisc = MultiResolutionDiscriminator()
         self.dac = DACDiscriminator()
         self.dacdiscriminator = DACGANLoss(self.dac)
-
         self.disc_loss = DiscriminatorLoss()
         self.gen_loss = GeneratorLoss()
         self.feat_matching_loss = FeatureMatchingLoss()
@@ -60,8 +59,6 @@ class Model(pl.LightningModule):
         self.current_training_step = -1
         self.automatic_optimization = False
     
-
-    # 重写 state_dict: 排除 utmos_model 和 feature_extractor
     def state_dict(self, *args, **kwargs):
         state = super().state_dict(*args, **kwargs)
         for key in list(state.keys()):
