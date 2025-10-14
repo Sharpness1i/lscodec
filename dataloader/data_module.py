@@ -12,6 +12,7 @@ import torch.distributed as dist
 from concurrent.futures import ThreadPoolExecutor
 import queue
 import threading
+from typing import Optional
 import librosa
 import yaml
 import time
@@ -376,9 +377,10 @@ class TestDataLoadIter:
         batch_size: int = 1, 
         num_workers: int = 1, 
         prefetch: int = 0,
+        speech_scp_base_dir:Optional[str] = None,
     ):
         self.wav_list = self.load_scp_to_list(wav_scp_path)
-
+        self.speech_scp_base_dir = speech_scp_base_dir
         self.is_train = False
         self.domain = domain
         self.batch_size = batch_size
@@ -413,7 +415,9 @@ class TestDataLoadIter:
     
     def process_one_sample(self, path):
         assert self.batch_size == 1
-        path = os.path.join('/root/code/qwen-omni',path)
+        if self.speech_scp_base_dir is None:
+            self.speech_scp_base_dir = '/root/code/qwen-omni'
+        path = os.path.join(self.speech_scp_base_dir,path)
         wav, fs = self.load_wav(path, fs=24000)
         
         # src, tgt, norm_factor = self.normalize_src_tgt(src, tgt)

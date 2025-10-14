@@ -1,6 +1,4 @@
 ROOT_DIR=/root/code/lscodec
-
-
 GPU_NUM=$1
 
 cd $ROOT_DIR
@@ -16,8 +14,10 @@ export WAVLM_DIR=$2
 
 export DEBUG_MODE=$3
 
-torchrun --nproc_per_node=$GPU_NUM --nnodes=1 train_lscodec.py --config /primus_biz_workspace/zhangboyang.zby/lscodec/conf/config.yaml
+config_file=$4
+
+torchrun --nproc_per_node=$GPU_NUM --nnodes=1 train_lscodec.py --config $config_file
 
 
-# bash /root/code/lscodec/train_run_lscodec.sh 1 /mnt/wavlm_large True
+# bash /root/code/lscodec/train_run_lscodec.sh 1 /mnt/wavlm_large True /primus_biz_workspace/zhangboyang.zby/lscodec/conf/config.yaml
 

@@ -11,6 +11,7 @@ from model.model import MultiPeriodDiscriminator, MultiResolutionDiscriminator, 
 from transformers.optimization import get_cosine_schedule_with_warmup
 from transformers import AutoModel
 import os
+import soundfile as sf
 WAVLM_DIR= os.environ.get("WAVLM_DIR") 
 
 from ..quantization import (
@@ -526,6 +527,28 @@ class MimiModel(pl.LightningModule, CompressionModel[_MimiState]):
         self.log("train/commit_loss", float(commit_loss), on_step=True, on_epoch=True)
         self.log("train/d_weight", float(d_weight), on_step=True, on_epoch=True)
         self.log("train/p_weight", float(p_weight), on_step=True, on_epoch=True)
+        
+    def test_step(self, batch):
+        wav_type, waveform, fs, length, postfix = batch
+        codes = self.encode(waveform.unsqueeze(1))
+        reconstructed_wav = self.decode(codes)
+
+        print("Reconstructed wav shape:", reconstructed_wav.shape)
+
+        # ---- 保存重建后的 wav ----
+        # 假设 postfix 是文件名，例如 "sample.wav"
+        base, ext = os.path.splitext(postfix[0])
+        recon_name = f"{base}_recon{ext}"
+
+        save_path = os.path.join("/primus_biz_workspace/zhangboyang.zby/lscodec/recon_wav", recon_name)
+
+        # waveform 形状可能是 (B, 1, T)，需要 squeeze 成一维
+        wav_to_save = reconstructed_wav.squeeze().detach().cpu().numpy()
+
+        sf.write(save_path, wav_to_save, fs)
+
+        print(f"Saved reconstructed wav to: {save_path}")
+
 
 
 
