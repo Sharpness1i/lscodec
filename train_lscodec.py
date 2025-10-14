@@ -37,7 +37,7 @@ def main(args):
         param.requires_grad = False
     
     data_module = DataModule(**config['dataset_config'])
-    checkpoint_callback_last = ModelCheckpoint(dirpath=ckpt_dir, save_on_train_epoch_end=True, filename='{epoch}-last')
+    checkpoint_callback_last = ModelCheckpoint(dirpath=ckpt_dir, save_on_train_epoch_end=True, filename='{epoch}-last.ckpt')
     
     trainer = pl.Trainer(
         accelerator=config['accelerator'],
@@ -46,7 +46,7 @@ def main(args):
         max_epochs=config['max_epochs'] if 'max_epochs' in config else None,
         max_steps=config['max_steps'] if 'max_steps' in config else None,
         val_check_interval=config['val_check_interval'],
-        check_val_every_n_epoch=config['chede dck_val_every_n_epoch'] if 'check_val_every_n_epoch' in config else 1,
+        check_val_every_n_epoch=config['check_val_every_n_epoch'] if 'check_val_every_n_epoch' in config else 1,
         limit_val_batches=config['limit_val_batches'] if 'limit_val_batches' in config else None,
         callbacks=[checkpoint_callback_last],
         logger=logger,

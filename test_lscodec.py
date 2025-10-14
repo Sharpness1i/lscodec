@@ -26,7 +26,7 @@ def main(args):
         config['save_enhanced'] = args.save_enhanced
         Path(args.save_enhanced).mkdir(parents=True, exist_ok=True)
 
-    model = loaders.get_mimi(filename=None, device=None, num_codebooks=16)
+    model = loaders.get_mimi(filename=config['save_enhanced'], device=None, num_codebooks=16)
     model.eval()
         
     data_module = DataModule(**config['dataset_config'])

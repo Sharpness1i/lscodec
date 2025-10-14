@@ -178,14 +178,12 @@ class TrainDataLoadIter:
             cut_duration = self.cut_duration if not isinstance(self.cut_duration, list) else random.uniform(*self.cut_duration)  # sample cut_duration
             batch_wav_16k = []
             batch_wav_24k = []
-
             lengths_16k = []
             lengths_24k = []
             for result in executor.map(self.process_one_sample, [fs] * self.batch_size, [cut_duration] * self.batch_size):
                 wav_16k,wav_24k,length_16k,length_24k = result
                 batch_wav_16k.append(wav_16k)
                 batch_wav_24k.append(wav_24k)
-   
                 lengths_24k.append(length_24k)
                 lengths_16k.append(length_16k)
           
@@ -298,7 +296,6 @@ class ValDataLoadIter:
 
         return wav, fs_
     
-
     def process_one_sample(self, fs, cut_duration, domain):
         if domain == 'speech':
             wav_path = random.choice(self.speech_list)
