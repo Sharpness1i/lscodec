@@ -1,3 +1,5 @@
 pretrained.pt
 bosonai_hubert_base/
 log/
+
+lscodec-checkpoint67.safetensors

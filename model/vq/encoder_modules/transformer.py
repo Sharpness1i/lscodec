@@ -266,7 +266,7 @@ class MoE(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x_origin = x
-        # x = self.norm2(x) ##from mimi transformer ffn block
+        # x = self.norm2(x) ##from lscodec transformer ffn block
 
         ##from deepseek ffn moe
         shape = x.size()

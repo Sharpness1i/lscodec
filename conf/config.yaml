@@ -1,21 +1,21 @@
 # gpu config
 accelerator: gpu
 num_nodes: 1
-devices: [0]
+devices: [0,1]
 
 # log config
-log_dir: ./log/log1001
+log_dir: ./log/log1030
 resume_from_last_ckpt: false
-resume: null
+resume: /root/code/lscodec/lscodec-checkpoint67.safetensors
 pretrained_pt_path: /root/code/lscodec/pretrained.pt
-
+every_n_train_steps: 2000
 # inference
 ckpt_path: null
 
 # dataset config
 dataset_config:
   train_kwargs:
-    batch_size: 2
+    batch_size: 32
     cut_duration: [5.0, 5.0]  # 5.0 seconds
     num_workers: 1 # set 1 for debug
     prefetch: 24
@@ -50,14 +50,14 @@ dataset_config:
 
 
 
-# training config
+
 # max_epochs: 200
 # val_check_interval: 0.5  # validate every 0.5 epochs
 
 max_steps: 1_200_000  # 1.2M/2 steps
-val_check_interval: 2_000  # validate every 2k steps
-check_val_every_n_epoch: null  # validate based on the total training batches
-limit_val_batches: 600  # 只用 600 个batch来验证
+#val_check_interval: 2_000  # validate every 2k steps
+#check_val_every_n_epoch: null  # validate based on the total training batches
+#limit_val_batches: 600  # 只用 600 个batch来验证
 
 
 gradient_clip_val: 5.0

@@ -6,21 +6,18 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 from natsort import natsorted
 import subprocess
-from model import Model
+
 from dataloader import DataModule
-from moshi.models import loaders, LMGen
+from lscodec.models import loaders
 import os
 DEBUG_MODE = os.environ.get("DEBUG_MODE", "false").lower() in ("1", "true", "yes")
 if DEBUG_MODE:
     import debugpy; debugpy.listen(('0.0.0.0', 5678)); print('I am waiting for you');debugpy.wait_for_client();debugpy.breakpoint();
 
 def main(args):
-
     pl.seed_everything(3407)
-    
     with open(args.config, 'r') as f:
         config = yaml.safe_load(f)
-    
     logger = TensorBoardLogger(save_dir=config['log_dir'], name='tensorboard')
     ckpt_dir = Path(config['log_dir']) / f'ckpts/version_{logger.version}' #change your folder, where to save files
     ckpt_dir.mkdir(parents=True, exist_ok=True)
@@ -29,7 +26,7 @@ def main(args):
     subprocess.run(['cp', 'conf/config.yaml', ckpt_dir])
     subprocess.run(['cp', 'train.py', ckpt_dir])
     
-    model = loaders.get_mimi(filename=None, device=None, num_codebooks=16)
+    model = loaders.get_lscodec(filename=config['resume'], device='cuda',num_codebooks=16,config=config)
     model.train()
     
     model.teacher_feature_extractor.eval()  
@@ -37,7 +34,16 @@ def main(args):
         param.requires_grad = False
     
     data_module = DataModule(**config['dataset_config'])
-    checkpoint_callback_last = ModelCheckpoint(dirpath=ckpt_dir, save_on_train_epoch_end=True, filename='{epoch}-last.ckpt')
+    checkpoint_callback = ModelCheckpoint(
+        dirpath=ckpt_dir,
+        filename="step-{step}",
+        every_n_train_steps=config['every_n_train_steps'], 
+        save_top_k=-1,                
+        save_last=False,
+        save_weights_only=False,     
+        monitor=None,                
+        verbose=True,
+    )
     
     trainer = pl.Trainer(
         accelerator=config['accelerator'],
@@ -45,10 +51,10 @@ def main(args):
         devices=config['devices'],
         max_epochs=config['max_epochs'] if 'max_epochs' in config else None,
         max_steps=config['max_steps'] if 'max_steps' in config else None,
-        val_check_interval=config['val_check_interval'],
-        check_val_every_n_epoch=config['check_val_every_n_epoch'] if 'check_val_every_n_epoch' in config else 1,
-        limit_val_batches=config['limit_val_batches'] if 'limit_val_batches' in config else None,
-        callbacks=[checkpoint_callback_last],
+        val_check_interval=None,
+        check_val_every_n_epoch=None,
+        limit_val_batches=0,
+        callbacks=[checkpoint_callback],
         logger=logger,
         strategy="auto" if len(config['devices']) == 1 else 'ddp_find_unused_parameters_true',
     )
@@ -66,7 +72,7 @@ def main(args):
                 break
         trainer.fit(model, data_module, ckpt_path=ckpt_path)
     else:
-        trainer.fit(model, data_module, ckpt_path=config['resume'])
+        trainer.fit(model, data_module, ckpt_path=None)
 
 
 

@@ -23,7 +23,7 @@ def main(args):
     subprocess.run(['cp', 'conf/config.yaml', ckpt_dir])
     
     subprocess.run(['cp', 'train.py', ckpt_dir])
-    # from moshi.models import loaders, LMGen
+    # from lscodec.models import loaders, LMGen
     model = Model(config=config)
     
     data_module = DataModule(**config['dataset_config'])

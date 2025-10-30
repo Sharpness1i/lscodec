@@ -4,11 +4,11 @@ from argparse import ArgumentParser
 from pathlib import Path
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
-from natsort import natsorted
-import subprocess
-from model import Model
+
+
+
 from dataloader import DataModule
-from moshi.models import loaders, LMGen
+from lscodec.models import loaders, LMGen
 import os
 DEBUG_MODE = os.environ.get("DEBUG_MODE", "false").lower() in ("1", "true", "yes")
 if DEBUG_MODE:
@@ -26,7 +26,7 @@ def main(args):
         config['save_enhanced'] = args.save_enhanced
         Path(args.save_enhanced).mkdir(parents=True, exist_ok=True)
 
-    model = loaders.get_mimi(filename=config['save_enhanced'], device=None, num_codebooks=16)
+    model = loaders.get_lscodec(filename=config['save_enhanced'], device=None, num_codebooks=16)
     model.eval()
         
     data_module = DataModule(**config['dataset_config'])

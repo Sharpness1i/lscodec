@@ -102,7 +102,6 @@ class TrainDataLoadIter:
         else:
             offset = 0.0
 
-        # librosa 默认返回 float32
         wav_24k, fs_ = librosa.load(
             info, dtype=np.float32, sr=fs_target_24, mono=False, offset=offset, duration=cut_duration
         )
