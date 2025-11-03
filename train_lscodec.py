@@ -6,7 +6,9 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 from natsort import natsorted
 import subprocess
+import os
 
+from dataloader.data_module_parquet import CosyDataModule
 from dataloader import DataModule
 from lscodec.models import loaders
 import os
@@ -33,7 +35,8 @@ def main(args):
     for param in model.teacher_feature_extractor.parameters():
         param.requires_grad = False
     
-    data_module = DataModule(**config['dataset_config'])
+    #data_module = DataModule(**config['dataset_config'])
+    data_module = CosyDataModule(args)
     checkpoint_callback = ModelCheckpoint(
         dirpath=ckpt_dir,
         filename="step-{step}",
@@ -79,5 +82,8 @@ def main(args):
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument('--config', type=str, default='./conf/config.yaml')
+    parser.add_argument('--cosy_yaml', type=str, default='./conf/config.yaml')
+    parser.add_argument('--uio_train_data', type=str, default='/primus_biz_workspace/zhangboyang.zby/data/emilia/train/data.list')
+
     args = parser.parse_args()
     main(args)

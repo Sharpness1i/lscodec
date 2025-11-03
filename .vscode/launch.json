@@ -10,7 +10,8 @@
       "request": "attach",
       "port": 5678,
       "console": "integratedTerminal",
-      "cwd": "${workspaceFolder}"
+      "cwd": "${workspaceFolder}",
+      "justMyCode":false,
     },
         {
       "name": "Attach to 5677",
@@ -18,7 +19,7 @@
       "request": "attach",
       "port": 5677,
       "console": "integratedTerminal",
-      "cwd": "${workspaceFolder}"
+      "cwd": "${workspaceFolder}",
     },
     ]
 }

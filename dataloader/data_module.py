@@ -20,7 +20,7 @@ import os
 import warnings
 warnings.filterwarnings("ignore")
 
-#OOT_DIR= os.environ.get("ROOT_DIR") 
+
 
 class TrainDataLoadIter:
     def __init__(
@@ -362,8 +362,6 @@ class ValDataLoadIter:
                 return num_batches + 1
             else:
                 return num_batches
-
-
 
 class TestDataLoadIter:
     def __init__(

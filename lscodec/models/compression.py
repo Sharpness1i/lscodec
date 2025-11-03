@@ -377,9 +377,10 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
         self.total_steps = 0
 
     def training_step(self, batch, batch_idx):
-        wav_16k, wav_24k, lengths_16k, lengths_24k = batch
+        wav_16k, wav_24k, lengths_16k, lengths_24k = batch['speech_16k'], batch['speech'], batch['speech_16k_lens'], batch['speech_lens']
+        
         teacher_feature = self.teacher_feature_extractor(wav_16k).last_hidden_state.detach()
-
+ 
         if wav_24k.dim() == 2:
             wav_24k = wav_24k.unsqueeze(1)
         wav = pad_for_conv1d(wav_24k, self.frame_size, self.frame_size)
@@ -421,7 +422,6 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
             sample_rate=24000,
         )
 
- 
         # ===== 统一日志 =====
         loss_gen = (
             self.loss_lambda["adv_genloss"] * losses_g["l_g"]
@@ -492,9 +492,6 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
         sf.write(save_path, wav_to_save, fs)
 
         print(f"Saved reconstructed wav to: {save_path}")
-
-
-
 
 
     def _encode_to_unquantized_latent(self, x: torch.Tensor) -> torch.Tensor:
