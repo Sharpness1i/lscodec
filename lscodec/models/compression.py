@@ -333,7 +333,6 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
     def forward(self, x ,teacher_feature=None) -> QuantizedResult:
         length = x.shape[-1]
         extra_metrics: tp.Dict[str, torch.Tensor] = {}
-
         if self.freeze_quantizer:
             if isinstance(self.quantizer, SplitResidualVectorQuantizer):
                 self.quantizer.rvq_first.eval()
@@ -374,7 +373,7 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
         q_res.x = out
         q_res.metrics.update(extra_metrics)
         
-        return recon , loss, q_res.distill_loss
+        return recon,loss,q_res.distill_loss
         
     def on_fit_start(self):
         self.total_steps = 0
