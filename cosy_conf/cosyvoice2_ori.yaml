@@ -11,7 +11,7 @@ filter: !name:cosyvoice.dataset.processor.filter
 resample: !name:cosyvoice.dataset.processor.resample
     resample_rate: !ref <sample_rate>
 truncate: !name:cosyvoice.dataset.processor.truncate
-    truncate_length: 24480 # must be a multiplier of hop_size
+    truncate_length: 73400 # must be a multiplier of hop_size
 feat_extractor: !name:matcha.utils.audio.mel_spectrogram
     n_fft: 1920
     num_mels: 80

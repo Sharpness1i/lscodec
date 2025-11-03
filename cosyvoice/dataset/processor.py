@@ -115,6 +115,7 @@ def truncate(data, truncate_length=24576, mode='train'):
         Returns:
             Iterable[{key, wav, label, sample_rate}]
     """
+    # 截长补短
     for sample in data:
         waveform = sample['speech']
         if waveform.shape[1] > truncate_length:
