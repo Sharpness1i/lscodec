@@ -1,12 +1,12 @@
-from pathlib import Path
-from .compression import lscodecModel
-from ..modules import SEANetEncoder, SEANetDecoder, transformer
-from ..quantization import SplitResidualVectorQuantizer
-import torch
-
 import torch
 import os
 from typing import Union, Tuple, List
+from pathlib import Path
+
+from .compression import lscodecModel
+from ..modules import SEANetEncoder, SEANetDecoder, transformer
+from ..quantization import SplitResidualVectorQuantizer
+
 
 SAMPLE_RATE = 24000
 FRAME_RATE = 12.5
@@ -56,88 +56,17 @@ _transformer_kwargs = {
 }
 
 
-
 def _is_safetensors(path: Path | str) -> bool:
     return Path(path).suffix in (".safetensors", ".sft", ".sfts")
 
 
-
-import torch
-import os
-from typing import Union, Tuple, List
-
-def load_model(
-    model: torch.nn.Module,
-    filename: Union[str, os.PathLike],
-    strict: bool = True,
-    device: Union[str, torch.device] = "cpu",
-) -> Tuple[List[str], List[str]]:
-    if not os.path.exists(filename):
-        raise FileNotFoundError(f"权重文件不存在: {filename}")
-
-  
-    if str(filename).endswith(".safetensors"):
-        try:
-            from safetensors.torch import load_file
-            state_dict = load_file(filename, device=device)
-        except ImportError:
-            raise RuntimeError("需要安装 safetensors: pip install safetensors")
-    else:
-        state_dict = torch.load(filename, map_location=device)
-
-
-    missing_keys, unexpected_keys = model.load_state_dict(state_dict, strict=False)
-
-
-    def long_prefixes(keys):
-        prefixes = set()
-        for k in keys:
-            parts = k.split(".")
-            prefixes.add(".".join(parts[:5]) if len(parts) >= 2 else parts[0])
-        return sorted(prefixes)
-
-    def short_prefixes(keys):
-        prefixes = set()
-        for k in keys:
-            parts = k.split(".")
-            prefixes.add(".".join(parts[:2]) if len(parts) >= 2 else parts[0])
-        return sorted(prefixes)
-    
-    short_missing = short_prefixes(missing_keys)
-    short_unexpected = long_prefixes(unexpected_keys)
-
-    if strict:
-        if missing_keys or unexpected_keys:
-            msg = f"加载权重时存在不匹配:\n"
-            if short_missing:
-                msg += f"  缺失权重模块: {short_missing}\n"
-            if short_unexpected:
-                msg += f"  多余权重模块: {short_unexpected}\n"
-            raise RuntimeError(msg)
-    else:
-        if short_missing:
-            print(f"忽略缺失权重模块: {short_missing}")
-        if short_unexpected:
-            print(f"忽略多余权重模块: {short_unexpected}")
-
-    print(f"模型权重加载完成: {filename}  (strict={strict})")
-    return missing_keys, unexpected_keys
-
-
-def get_lscodec(
-    filename, device, num_codebooks,config
-) -> lscodecModel:
+def get_lscodec(filename, device, num_codebooks, config):
     encoder = SEANetEncoder(**_seanet_kwargs)
     decoder = SEANetDecoder(**_seanet_kwargs)
-    encoder_transformer = transformer.ProjectedTransformer(
-        device=device, **_transformer_kwargs
-    )
-    decoder_transformer = transformer.ProjectedTransformer(
-        device=device, **_transformer_kwargs
-    )
-    quantizer = SplitResidualVectorQuantizer(
-        **_quantizer_kwargs,
-    )
+    encoder_transformer = transformer.ProjectedTransformer(device=device, **_transformer_kwargs)
+    decoder_transformer = transformer.ProjectedTransformer(device=device, **_transformer_kwargs)
+    quantizer = SplitResidualVectorQuantizer(**_quantizer_kwargs)
+
     model = lscodecModel(
         encoder,
         decoder,
@@ -154,16 +83,43 @@ def get_lscodec(
     ).to(device=device)
 
     model.set_num_codebooks(num_codebooks)
-    
-    if filename is not None:
-        if _is_safetensors(filename):
-            load_model(model, filename, device=str(device),strict=False)
+
+    if filename is None or not os.path.exists(filename):
+        print(f"未提供权重文件或路径不存在: {filename}")
+        return model
+
+    print(f"🔍 加载模型权重: {filename}")
+    allowed_prefixes = [
+        "encoder",
+        "decoder",
+        "encoder_transformer",
+        "decoder_transformer",
+        "quantizer",
+    ]
+
+    # === 权重加载逻辑 ===
+    if _is_safetensors(filename):
+        from safetensors.torch import load_file
+        state_dict = load_file(filename, device=device)
+    else:
+        pkg = torch.load(filename, map_location=device)
+        if isinstance(pkg, dict):
+            state_dict = pkg.get("state_dict") or pkg.get("model") or pkg
         else:
-            pkg = torch.load(filename, "cpu")
-            model.load_state_dict(pkg["model"])
-    
+            state_dict = pkg
+
+    # === 权重过滤 ===
+    filtered_state_dict = {k: v for k, v in state_dict.items() if any(k.startswith(p) for p in allowed_prefixes)}
+    dropped = [k for k in state_dict.keys() if k not in filtered_state_dict]
+    print(f"仅加载核心模块参数 ({len(filtered_state_dict)}/{len(state_dict)})")
+    if len(dropped) > 0:
+        print(f"已忽略非核心权重（示例前5项）: {dropped[:5]}")
+
+    missing, unexpected = model.load_state_dict(filtered_state_dict, strict=False)
+    if missing:
+        print(f"缺失参数 {len(missing)} 个 (示例): {missing[:3]}")
+    if unexpected:
+        print(f"未使用参数 {len(unexpected)} 个 (示例): {unexpected[:3]}")
+
+    print("🎯 模型加载完成 (仅核心模块)")
     return model
-
-
-
-

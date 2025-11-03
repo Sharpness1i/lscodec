@@ -10,6 +10,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from dataloader import DataModule
 from lscodec.models import loaders, LMGen
 import os
+
 DEBUG_MODE = os.environ.get("DEBUG_MODE", "false").lower() in ("1", "true", "yes")
 if DEBUG_MODE:
     import debugpy; debugpy.listen(('0.0.0.0', 5678)); print('I am waiting for you');debugpy.wait_for_client();debugpy.breakpoint();
@@ -24,9 +25,10 @@ def main(args):
 
     if args.save_enhanced is not None:
         config['save_enhanced'] = args.save_enhanced
-        Path(args.save_enhanced).mkdir(parents=True, exist_ok=True)
+        Path(args.save_enhanced).parent.mkdir(parents=True, exist_ok=True)
 
-    model = loaders.get_lscodec(filename=config['save_enhanced'], device=None, num_codebooks=16)
+    model = loaders.get_lscodec(filename=config['save_enhanced'], device=None, num_codebooks=16,config=config)
+
     model.eval()
         
     data_module = DataModule(**config['dataset_config'])

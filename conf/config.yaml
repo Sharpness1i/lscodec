@@ -8,7 +8,7 @@ log_dir: ./log/log1030
 resume_from_last_ckpt: false
 resume: /root/code/lscodec/lscodec-checkpoint67.safetensors
 pretrained_pt_path: /root/code/lscodec/pretrained.pt
-every_n_train_steps: 2000
+every_n_train_steps: 100
 # inference
 ckpt_path: null
 

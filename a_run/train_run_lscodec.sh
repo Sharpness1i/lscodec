@@ -22,3 +22,6 @@ torchrun --nproc_per_node=$GPU_NUM --nnodes=1 train_lscodec.py --config $config_
 # bash /root/code/lscodec/a_run/train_run_lscodec.sh 1 /mnt/wavlm_large True /root/code/lscodec/conf/config.yaml
 
 # bash /root/code/lscodec/a_run/train_run_lscodec.sh 2 /mnt/wavlm_large False /root/code/lscodec/conf/config.yaml
+
+
+# bash /root/code/lscodec/a_run/train_run_lscodec.sh 1 /mnt/wavlm_large True /primus_biz_workspace/zhangboyang.zby/lscodec/conf/config.yaml

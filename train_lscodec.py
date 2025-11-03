@@ -7,7 +7,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from natsort import natsorted
 import subprocess
 import os
-
+from safetensors.torch import save_file
 from dataloader.data_module_parquet import CosyDataModule
 from dataloader import DataModule
 from lscodec.models import loaders
@@ -15,6 +15,13 @@ import os
 DEBUG_MODE = os.environ.get("DEBUG_MODE", "false").lower() in ("1", "true", "yes")
 if DEBUG_MODE:
     import debugpy; debugpy.listen(('0.0.0.0', 5678)); print('I am waiting for you');debugpy.wait_for_client();debugpy.breakpoint();
+
+
+
+def save_as_safetensors(checkpoint, path):
+    from safetensors.torch import save_file
+    tensors = checkpoint["state_dict"]
+    save_file(tensors, str(path).replace(".ckpt", ".safetensors"))
 
 def main(args):
     pl.seed_everything(3407)

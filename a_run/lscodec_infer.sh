@@ -1,6 +1,3 @@
-
-## 
-
 export HF_ENDPOINT=https://hf-mirror.com
 export WAVLM_DIR=$1
 
@@ -14,4 +11,4 @@ python /root/code/lscodec/test_lscodec.py --config /primus_biz_workspace/zhangbo
 
 
 
-# bash /root/code/lscodec/lscodec_infer.sh /primus_biz_workspace/zhangboyang.zby/CKPT/wavlm_large False /root/code/lscodec/log/log1001/ckpts/version_7/epoch=4-last.ckpt
+# bash /root/code/lscodec/a_run/lscodec_infer.sh /mnt/wavlm_large True /root/code/lscodec/log/log1030/ckpts/version_0/step-step=100.ckpt
