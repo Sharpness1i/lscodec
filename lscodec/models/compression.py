@@ -127,7 +127,10 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
         freeze_quantizer: bool = False,
         freeze_quantizer_level: int = -1,
         config: str = None,
+        recon_dir: str = None,
+        discriminator_start_step: int = 10000,
     ):
+        self.recon_dir = recon_dir
         super().__init__()
         self.disc_model = MultiScaleSTFTDiscriminator(filters=32)
         self.teacher_feature_extractor = AutoModel.from_pretrained(WAVLM_DIR).eval()
@@ -152,7 +155,7 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
             "waveform_loss": 0.1,        # 对应 losses_g['l_t']
             "ms_mel_loss": 1.0,          # 对应 losses_g['l_f']
             "commit_loss": 1.0,          # 对应 commit_loss
-            "distill_loss": 10.0,        # 对应 distill_loss
+            "distill_loss": 5.0,        # 对应 distill_loss
         }
         if freeze_encoder:
             for p in self.encoder.parameters():
@@ -176,7 +179,7 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
         # which exposes a `dimension` attribute.
         dimension = encoder.dimension
         self.total_steps = 0
-
+        self.discriminator_start_step= discriminator_start_step
         assert resample_method in ["interpolate","conv","avg_pool",], f"Invalid resample_method {resample_method}"
         self.resample_method = resample_method
         if encoder_frame_rate != frame_rate:
@@ -344,12 +347,12 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
             else:
                 raise ValueError(f"Unsupported quantizer type {type(self.quantizer)}")
 
-        emb = self.encoder(x)
+        emb = self.encoder(x) # 960倍下采样
 
         if self.encoder_transformer is not None:
-            (emb,) = self.encoder_transformer(emb)
-        emb = self._to_framerate(emb)
-        expected_length = self.frame_rate * length / self.sample_rate
+            (emb,) = self.encoder_transformer(emb) # 时间长度不变
+        emb = self._to_framerate(emb) # 下采样 2倍 ；
+        expected_length = self.frame_rate * length / self.sample_rate  # 这个expected length 正是 samples // 1920  (符合 frame_rate = 12.5HZ 的长度)
         # Checking that we have the proper length given the advertised frame rate.
         assert abs(emb.shape[-1] - expected_length) < 1, (
             emb.shape[-1],
@@ -395,12 +398,14 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
             self.total_steps = int(t.item())
 
         # ====== 生成器前向 ======
+        
+        
         x_hat, commit_loss, distill_loss = self(wav, teacher_feature=teacher_feature)
 
         # ===== 判别器 =====
         opt_disc.zero_grad()
         loss_disc = torch.tensor(0.0, device=self.device)
-        if self.total_steps >= 10000:
+        if self.total_steps >= self.discriminator_start_step:
             logits_real, fmap_real = self.disc_model(wav)
             logits_fake, fmap_fake = self.disc_model(x_hat.detach())
             loss_disc = disc_loss(logits_real, logits_fake)
@@ -409,7 +414,6 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
             opt_disc.step()
         sch_disc.step()
 
-        # ===== 生成器 =====
         opt_gen.zero_grad()
         logits_real, fmap_real = self.disc_model(wav)
         logits_fake, fmap_fake = self.disc_model(x_hat)
@@ -422,7 +426,6 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
             sample_rate=24000,
         )
 
-        # ===== 统一日志 =====
         loss_gen = (
             self.loss_lambda["adv_genloss"] * losses_g["l_g"]
             + self.loss_lambda["l_feat"] * losses_g["l_feat"]
@@ -437,7 +440,6 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
         opt_gen.step()
         sch_gen.step()
 
-        # ======== 构建统一日志字典 ========
         log_dict = {
             "train/generator_total_loss": loss_gen.detach(),
             "train/adv_genloss": self.loss_lambda["adv_genloss"] * losses_g["l_g"].detach(),
@@ -477,19 +479,21 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
         codes = self.encode(waveform.unsqueeze(1))
         reconstructed_wav = self.decode(codes)
 
-        print("Reconstructed wav shape:", reconstructed_wav.shape)
-
-        # ---- 保存重建后的 wav ----
-        # 假设 postfix 是文件名，例如 "sample.wav"
         base, ext = os.path.splitext(postfix[0])
         recon_name = f"{base}_recon{ext}"
+        os.makedirs(self.recon_dir, exist_ok=True)
+        save_path = os.path.join(self.recon_dir, recon_name)
+        fs = int(fs.item()) if isinstance(fs, torch.Tensor) else int(fs)
 
-        save_path = os.path.join("/primus_biz_workspace/zhangboyang.zby/lscodec/recon_wav", recon_name)
-
-        # waveform 形状可能是 (B, 1, T)，需要 squeeze 成一维
         wav_to_save = reconstructed_wav.squeeze().detach().cpu().numpy()
 
-        sf.write(save_path, wav_to_save, fs)
+        if wav_to_save.ndim == 3:
+            wav_to_save = wav_to_save[0]
+        
+        if wav_to_save.ndim == 1:
+            wav_to_save = wav_to_save.unsqueeze(0)
+        
+        torchaudio.save(save_path, wav_to_save, sample_rate=fs)
 
         print(f"Saved reconstructed wav to: {save_path}")
 

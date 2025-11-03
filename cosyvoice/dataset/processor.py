@@ -53,7 +53,10 @@ def filter(data,
 
     for sample in data:
         utt_id = sample.get('utt', '[unknown_utt]')
-
+        utt_embedding = sample.get('utt_embedding', None)
+        if utt_embedding is None:
+            print(utt_id, "缺失 utt_embedding")
+            continue
         audio_data = sample.get('audio_data', None)
         if audio_data is None:
             print(utt_id, "缺失 audio_data")
@@ -62,6 +65,8 @@ def filter(data,
         sample['speech'] = sample['speech'].mean(dim=0, keepdim=True)
         del sample['audio_data']
 
+        
+        
         sample_rate = sample.get('sample_rate', None)
         if sample['speech'] is None or sample_rate is None:
             print(utt_id, "缺失 speech 或 sample_rate")
@@ -185,8 +190,6 @@ def parse_embedding(data, normalize, mode='train'):
             sample['utt_embedding'] = F.normalize(sample['utt_embedding'], dim=0)
             sample['spk_embedding'] = F.normalize(sample['spk_embedding'], dim=0)
         yield sample
-
-
 
 
 

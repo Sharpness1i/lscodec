@@ -85,7 +85,7 @@ def get_lscodec(filename, device, num_codebooks, config):
     model.set_num_codebooks(num_codebooks)
 
     if filename is None or not os.path.exists(filename):
-        print(f"未提供权重文件或路径不存在: {filename}")
+        print(f"train from scratch")
         return model
 
     print(f"🔍 加载模型权重: {filename}")

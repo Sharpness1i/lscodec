@@ -6,7 +6,8 @@ devices: [0]
 # log config
 log_dir: ./log/log1030
 resume_from_last_ckpt: false
-resume: /root/code/lscodec/lscodec-checkpoint67.safetensors
+#resume: /root/code/lscodec/lscodec-checkpoint67.safetensors
+resume: null
 pretrained_pt_path: /root/code/lscodec/pretrained.pt
 every_n_train_steps: 100
 # inference
@@ -15,7 +16,7 @@ ckpt_path: null
 # dataset config
 dataset_config:
   train_kwargs:
-    batch_size: 32
+    batch_size: 64
     cut_duration: [5.0, 5.0]  # 5.0 seconds
     num_workers: 1 # set 1 for debug
     prefetch: 24
@@ -62,9 +63,9 @@ max_steps: 1_200_000  # 1.2M/2 steps
 
 gradient_clip_val: 5.0
 opt_gen:
-  lr: 5.0e-4
+  lr: 3.0e-4
 opt_disc:
-  lr: 5.0e-4
+  lr: 3.0e-4
 sch:
   warmup_steps: 0
 perceptual_start_step: 500_000

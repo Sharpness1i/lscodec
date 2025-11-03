@@ -11,7 +11,7 @@
       "port": 5678,
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
-      "justMyCode":false,
+      "justMyCode":true,
     },
         {
       "name": "Attach to 5677",

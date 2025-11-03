@@ -42,7 +42,7 @@ def main(args):
     for param in model.teacher_feature_extractor.parameters():
         param.requires_grad = False
     
-    #data_module = DataModule(**config['dataset_config'])
+    
     data_module = CosyDataModule(args)
     checkpoint_callback = ModelCheckpoint(
         dirpath=ckpt_dir,

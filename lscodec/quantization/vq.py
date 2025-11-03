@@ -112,7 +112,7 @@ class ResidualVectorQuantizer(BaseQuantizer):
         
 
         n_q = self.n_q
-        x = self.input_proj(x)
+        x = self.input_proj(x) # （b,512,T)->(b,256,T)
         if self.training and self.q_dropout:
             n_q = self.rng_dropout.randint(1, self.n_q)
         bw_per_q = math.log2(self.bins) * frame_rate / 1000
@@ -207,29 +207,13 @@ class SplitResidualVectorQuantizer(BaseQuantizer):
             q_dropout=q_dropout,
             **kwargs,
         )
-        self.quanti_proj = torch.nn.Linear(512,1024).to('cuda')
+        self.quantizer_proj = torch.nn.Linear(512,1024).to('cuda')
     
-    def noncausal_avgpool1d(self, x, downsample=4):
-        """
-        非因果平均池化，下采样4倍。
-        Args:
-            x: (B, C, T)
-            downsample: 下采样倍率 (默认 4)
-        Return:
-            y: (B, C, T/4)
-        """
-        k = downsample
-        # 对称填充，保证非因果（左右各 pad=(k-1)//2）
-        pad = (k - 1) // 2
-        x = F.pad(x, (pad, pad), mode="reflect")
+    def noncausal_avg_pool1d(self,x, kernel_size=8, stride=4, padding_mode="reflect"):
 
-        # 卷积平均池化
-        weight = torch.ones(x.size(1), 1, k, device=x.device, dtype=x.dtype) / k
-        y = F.conv1d(x, weight, stride=k, groups=x.size(1))
-
-        # 截断输出，确保精确下采样为1/4（防止浮点边界误差）
-        target_len = x.shape[-1] // k
-        y = y[..., :target_len]
+        pad = (kernel_size - 1) // 2
+        x_padded = F.pad(x, (pad, pad), mode=padding_mode)
+        y = F.avg_pool1d(x_padded, kernel_size=kernel_size, stride=stride)
         return y
 
     def _renorm_and_add(
@@ -265,14 +249,21 @@ class SplitResidualVectorQuantizer(BaseQuantizer):
                 - `metrics` (dict): RVQ metrics, in particular rate of dead code replacement, and entropy.
         """
         semantic_result = self.rvq_first(x, frame_rate)
-        semantic_embed = self.quanti_proj(semantic_result.x.transpose(1,2))
+        semantic_embed = self.quantizer_proj(semantic_result.x.transpose(1,2))
         
-        teacher_features_pool = F.avg_pool1d(teacher_features.transpose(1, 2), kernel_size=8, stride=4).transpose(1, 2) #  (B, T/4, D)
+        teacher_features_pool = (
+            self.noncausal_avg_pool1d(
+                teacher_features.transpose(1, 2),  # (B, D, T)
+                kernel_size=8,
+                stride=4
+            ).transpose(1, 2)  # 回到 (B, T/4, D)
+     )
         
-        if teacher_features_pool.size(1) != teacher_features.size(1):
-            teacher_features_pool  = F.adaptive_avg_pool1d(
-                teacher_features_pool.transpose(1, 2), output_size=semantic_embed.size(1)
-            ).transpose(1, 2) 
+        
+        # if teacher_features_pool.size(1) != teacher_features.size(1):
+        #     teacher_features_pool  = F.adaptive_avg_pool1d(
+        #         teacher_features_pool.transpose(1, 2), output_size=semantic_embed.size(1)
+        #     ).transpose(1, 2) 
         
         distill_loss = d_axis_distill_loss(semantic_embed, teacher_features_pool)
         
