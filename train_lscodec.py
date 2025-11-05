@@ -9,9 +9,10 @@ import subprocess
 import os
 from safetensors.torch import save_file
 from dataloader.data_module_parquet import CosyDataModule
-from dataloader import DataModule
+
 from lscodec.models import loaders
 import os
+import torch
 DEBUG_MODE = os.environ.get("DEBUG_MODE", "false").lower() in ("1", "true", "yes")
 if DEBUG_MODE:
     import debugpy; debugpy.listen(('0.0.0.0', 5678)); print('I am waiting for you');debugpy.wait_for_client();debugpy.breakpoint();
@@ -37,8 +38,11 @@ def main(args):
     subprocess.run(['cp', args.config, ckpt_dir])
     subprocess.run(['cp', 'train.py', ckpt_dir])
     
+    local_rank = int(os.environ.get("LOCAL_RANK", 0))
+    device = torch.device(f"cuda:{local_rank}")
     
-    model = loaders.get_lscodec(filename=None, device='cuda',num_codebooks=16,config=config)
+    model = loaders.get_lscodec(filename=None, device=None,num_codebooks=16,config=config)
+    
     model.train()
     
     model.teacher_feature_extractor.eval()  
@@ -57,8 +61,7 @@ def main(args):
         monitor=None,                
         verbose=True,
     )
-    
-    
+
     if config['num_nodes'] == 1 and len(config['devices']) > 1:
         strategy = "ddp"
     elif config['num_nodes'] > 1:

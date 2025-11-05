@@ -395,10 +395,8 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
             t = torch.tensor(self.total_steps, device=self.device)
             torch.distributed.broadcast(t, src=0)
             self.total_steps = int(t.item())
-
+            
         # ====== 生成器前向 ======
-        
-        
         x_hat, commit_loss, distill_loss = self(wav, teacher_feature=teacher_feature)
 
         # ===== 判别器 =====
