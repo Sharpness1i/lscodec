@@ -80,6 +80,7 @@ def get_lscodec(filename, device, num_codebooks, config):
         encoder_transformer=encoder_transformer,
         decoder_transformer=decoder_transformer,
         config=config,
+        discriminator_start_step=config.get("discriminator_start_step", 0),
     ).to(device=device)
 
     model.set_num_codebooks(num_codebooks)

@@ -15,7 +15,6 @@ echo "MASTER_ADDR=$MASTER_ADDR"
 echo "MASTER_PORT=$MASTER_PORT"
 echo "NNODES=$NNODES"
 echo "NODE_RANK=$NODE_RANK"
-
 echo "GPUS_PER_NODE=$GPUS_PER_NODE"
 echo "-----------------------------------------"
 

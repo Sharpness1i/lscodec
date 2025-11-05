@@ -6,7 +6,8 @@ devices: [0]
 
 # log config
 log_dir: ./log/log1030
-resume_from_last_ckpt: true
+resume_from_last_ckpt: false
+discriminator_start_step: 10
 #resume: /root/code/lscodec/lscodec-checkpoint67.safetensors
 resume: null
 pretrained_pt_path: /root/code/lscodec/pretrained.pt

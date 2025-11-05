@@ -15,13 +15,13 @@ export WAVLM_DIR=$2
 export DEBUG_MODE=$3
 
 config_file=$4
+cosy_yaml=$5
+ 
+data_list=$6
 
-data_list=$5
+torchrun --nproc_per_node=$GPU_NUM --nnodes=1 train_lscodec.py --config $config_file --cosy_yaml $cosy_yaml --uio_train_data $data_list
 
-torchrun --nproc_per_node=$GPU_NUM --nnodes=1 train_lscodec.py --config $config_file --cosy_yaml /root/code/lscodec/cosy_conf/cosyvoice2_ori.yaml --uio_train_data $data_list
-
-    
-# bash /root/code/lscodec/a_run/train_run_lscodec.sh 1 /mnt/wavlm_large True /root/code/lscodec/conf/config.yaml /primus_biz_workspace/zhangboyang.zby/data/emilia/train/data.list
+# bash /root/code/lscodec/a_run/train_run_lscodec.sh 1 /mnt/wavlm_large True /root/code/lscodec/conf/config.yaml /root/code/lscodec/cosy_conf/cosyvoice2_ori.yaml /primus_biz_workspace/zhangboyang.zby/data/emilia/train/data.list
 
 # bash /root/code/lscodec/a_run/train_run_lscodec.sh 2 /mnt/wavlm_large False /root/code/lscodec/conf/config.yaml
 
