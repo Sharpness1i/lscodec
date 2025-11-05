@@ -25,15 +25,12 @@ class CompressionModel(StreamingModule[StateT]):
     """Base API for all compression model that aim at being used as audio tokenizers
     with a language model.
     """
-
     @abstractmethod
     def forward(self, x: torch.Tensor) -> QuantizedResult: ...
-
     @abstractmethod
     def encode(self, x: torch.Tensor) -> torch.Tensor:
         """See `lscodecModel.encode`."""
         ...
-
     @abstractmethod
     def decode(self, codes: torch.Tensor) -> torch.Tensor:
         """See `lscodecModel.decode`."""
@@ -42,7 +39,6 @@ class CompressionModel(StreamingModule[StateT]):
     def decode_latent(self, codes: torch.Tensor) -> torch.Tensor:
         """Decode from the discrete codes to continuous latent space."""
         ...
-
     @property
     @abstractmethod
     def channels(self) -> int: ...
@@ -50,7 +46,6 @@ class CompressionModel(StreamingModule[StateT]):
     @property
     @abstractmethod
     def frame_size(self) -> int: ...
-
     @property
     @abstractmethod
     def frame_rate(self) -> float: ...
@@ -150,13 +145,14 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
         self.automatic_optimization = False
         
         self.loss_lambda = {
-            "adv_genloss": 3.0,          # 对应 losses_g['l_g']
-            "l_feat": 3.0,               # 对应 losses_g['l_feat']
-            "waveform_loss": 0.1,        # 对应 losses_g['l_t']
-            "ms_mel_loss": 1.0,          # 对应 losses_g['l_f']
+            "adv_genloss": 2.0,          # 对应 losses_g['l_g']  # 1-3    细粒度 补充
+            "l_feat": 10.0,               # 对应 losses_g['l_feat']    #  中间层次 ；粗粒度
+            "waveform_loss": 0.1,        # 对应 losses_g['l_t']  # 0.1   细粒度
+            "ms_mel_loss": 15.0,          # 对应 losses_g['l_f'] # 粗粒度 补充
             "commit_loss": 1.0,          # 对应 commit_loss
-            "distill_loss": 5.0,        # 对应 distill_loss
+            "distill_loss": 10.0,        # 对应 distill_loss
         }
+   
         if freeze_encoder:
             for p in self.encoder.parameters():
                 p.requires_grad = False
@@ -283,13 +279,16 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
     
 
     def configure_optimizers(self):
+        
         gen_params = [
-            {"params": self.encoder.parameters()},
-            {"params": self.decoder.parameters()},
-            {"params": self.quantizer.parameters()},
-            {"params": self.encoder_transformer.parameters()},
-            {"params": self.decoder_transformer.parameters()},
+        {"params": self.encoder.parameters()},
+        {"params": self.decoder.parameters()},
+        {"params": self.quantizer.parameters()},
         ]
+        if self.encoder_transformer is not None:
+            gen_params.append({"params": self.encoder_transformer.parameters()})
+        if self.decoder_transformer is not None:
+            gen_params.append({"params": self.decoder_transformer.parameters()})
         disc_params = [{"params": self.disc_model.parameters()}]
 
         opt_gen = torch.optim.AdamW(gen_params, self.config['opt_gen']['lr'])
@@ -406,10 +405,11 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
             opt_disc.step()
         else:
             loss_disc = torch.tensor(0.0, device=self.device)
-        sch_disc.step()
+
 
         # ===== 生成器步 =====
         opt_gen.zero_grad()
+        
         if use_gan:
             # GAN 阶段：对 G 的 forward 要用未 detach 的 x_hat
             logits_real_G, fmap_real_G = self.disc_model(wav)
@@ -433,7 +433,7 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
             use_gan=_use_gan, # 如果没有达到discriminator warm up steps 那么 就不用 生成器对抗损失 
             use_fm=_use_fm,  # 也不用 feature matching loss
         )
-
+        
         loss_gen = (
             self.loss_lambda["adv_genloss"] * losses_g["l_g"]
             + self.loss_lambda["l_feat"] * losses_g["l_feat"]
@@ -448,8 +448,8 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
         opt_gen.step()
         sch_gen.step()
 
-        # ===== log =====
-        self.log_dict({
+
+        logs = {
             "train/generator_total_loss": loss_gen.detach(),
             "train/adv_genloss": self.loss_lambda["adv_genloss"] * losses_g["l_g"].detach(),
             "train/l_feat": self.loss_lambda["l_feat"] * losses_g["l_feat"].detach(),
@@ -458,7 +458,8 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
             "train/commit_loss": self.loss_lambda["commit_loss"] * commit_loss.detach(),
             "train/distill_loss": self.loss_lambda["distill_loss"] * distill_loss.detach(),
             "train/loss_disc": loss_disc.detach(),
-        }, on_step=True, prog_bar=False, logger=True, sync_dist=True)
+        }
+        self.log_dict(logs, on_step=True, prog_bar=False, logger=True, sync_dist=True)    
 
         if (self.global_step % 10 == 0) or (batch_idx == 0):
             print(f"\n[Step {self.global_step:>6d}] | ", end="")
@@ -483,9 +484,7 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
                     "train/distill_loss",
                 ]
 
-            console_str = " | ".join(
-                [f"{name.split('/')[-1]}: {log_dict[name].item():8.3f}" for name in console_order]
-            )
+            console_str = " | ".join([f"{name.split('/')[-1]}: {logs[name].item():8.3f}" for name in console_order])
             print(console_str, flush=True)
         
         
