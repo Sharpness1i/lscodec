@@ -3,20 +3,21 @@ accelerator: gpu
 num_nodes: 1
 devices: [0]
 
+
 # log config
 log_dir: ./log/log1030
-resume_from_last_ckpt: false
+resume_from_last_ckpt: true
 #resume: /root/code/lscodec/lscodec-checkpoint67.safetensors
 resume: null
 pretrained_pt_path: /root/code/lscodec/pretrained.pt
-every_n_train_steps: 4000
+every_n_train_steps: 100
 # inference
 ckpt_path: null
 
 # dataset config
 dataset_config:
   train_kwargs:
-    batch_size: 64
+    batch_size: 2
     cut_duration: [5.0, 5.0]  # 5.0 seconds
     num_workers: 1 # set 1 for debug
     prefetch: 24

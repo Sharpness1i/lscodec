@@ -1,7 +1,3 @@
-# gpu config
-
-
-
 callbacks:
   model_checkpoint:
     _target_: lightning.pytorch.callbacks.ModelCheckpoint

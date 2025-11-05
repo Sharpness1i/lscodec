@@ -28,14 +28,17 @@ def main(args):
     with open(args.config, 'r') as f:
         config = yaml.safe_load(f)
     logger = TensorBoardLogger(save_dir=config['log_dir'], name='tensorboard')
+    
     ckpt_dir = Path(config['log_dir']) / f'ckpts/version_{logger.version}' #change your folder, where to save files
+    
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     
     config['ckpt_dir'] = ckpt_dir
-    subprocess.run(['cp', 'conf/config.yaml', ckpt_dir])
+    subprocess.run(['cp', args.config, ckpt_dir])
     subprocess.run(['cp', 'train.py', ckpt_dir])
     
-    model = loaders.get_lscodec(filename=config['resume'], device='cuda',num_codebooks=16,config=config)
+    
+    model = loaders.get_lscodec(filename=None, device='cuda',num_codebooks=16,config=config)
     model.train()
     
     model.teacher_feature_extractor.eval()  
@@ -55,6 +58,14 @@ def main(args):
         verbose=True,
     )
     
+    
+    if config['num_nodes'] == 1 and len(config['devices']) > 1:
+        strategy = "ddp"
+    elif config['num_nodes'] > 1:
+        strategy = "ddp"
+    else:
+        strategy = "auto"
+    
     trainer = pl.Trainer(
         accelerator=config['accelerator'],
         num_nodes=config['num_nodes'],
@@ -66,7 +77,7 @@ def main(args):
         limit_val_batches=0,
         callbacks=[checkpoint_callback],
         logger=logger,
-        strategy="auto" if len(config['devices']) == 1 else 'ddp_find_unused_parameters_true',
+        strategy=strategy,
     )
 
     if config['resume_from_last_ckpt']:
@@ -82,13 +93,13 @@ def main(args):
                 break
         trainer.fit(model, data_module, ckpt_path=ckpt_path)
     else:
-        trainer.fit(model, data_module, ckpt_path=None)
+        trainer.fit(model, data_module, ckpt_path=config['resume'])
 
 
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument('--config', type=str, default='./conf/config.yaml')
+    parser.add_argument('--config', type=str, default='/root/code/lscodec/conf/config.yaml')
     parser.add_argument('--cosy_yaml', type=str, default='./conf/config.yaml')
     parser.add_argument('--uio_train_data', type=str, default='/primus_biz_workspace/zhangboyang.zby/data/emilia/train/data.list')
 

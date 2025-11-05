@@ -36,7 +36,7 @@ sort: !name:cosyvoice.dataset.processor.sort
     sort_size: 500  # sort_size should be less than shuffle_size
 batch: !name:cosyvoice.dataset.processor.batch
     batch_type: 'static'
-    batch_size: 64
+    batch_size: 2
 padding: !name:cosyvoice.dataset.processor.padding
     use_spk_embedding: False # change to True during sft
 
