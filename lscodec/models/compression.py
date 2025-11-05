@@ -379,10 +379,11 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
         self.total_steps = 0
 
     def training_step(self, batch, batch_idx):
-        wav_16k, wav_24k, lengths_16k, lengths_24k = batch['speech_16k'], batch['speech'], batch['speech_16k_lens'], batch['speech_lens']
-        
+        wav_16k, wav_24k = batch['speech_16k'], batch['speech']
+        lengths_16k, lengths_24k = batch['speech_16k_lens'], batch['speech_lens']
+
         teacher_feature = self.teacher_feature_extractor(wav_16k).last_hidden_state.detach()
- 
+
         if wav_24k.dim() == 2:
             wav_24k = wav_24k.unsqueeze(1)
         wav = pad_for_conv1d(wav_24k, self.frame_size, self.frame_size)
@@ -390,37 +391,47 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
         opt_gen, opt_disc = self.optimizers()
         sch_gen, sch_disc = self.lr_schedulers()
 
-        self.total_steps += 1
-        if torch.distributed.is_initialized():
-            t = torch.tensor(self.total_steps, device=self.device)
-            torch.distributed.broadcast(t, src=0)
-            self.total_steps = int(t.item())
-            
-        # ====== 生成器前向 ======
+        use_gan = (self.global_step >= self.discriminator_start_step)
+
         x_hat, commit_loss, distill_loss = self(wav, teacher_feature=teacher_feature)
 
-        # ===== 判别器 =====
+        # ===== 判别器步（仅在 use_gan 时启用）=====
         opt_disc.zero_grad()
-        loss_disc = torch.tensor(0.0, device=self.device)
-        if self.total_steps >= self.discriminator_start_step:
-            logits_real, fmap_real = self.disc_model(wav)
-            logits_fake, fmap_fake = self.disc_model(x_hat.detach())
-            loss_disc = disc_loss(logits_real, logits_fake)
+        if use_gan:
+            logits_real_D, fmap_real_D = self.disc_model(wav)
+            logits_fake_D, fmap_fake_D = self.disc_model(x_hat.detach())
+            loss_disc = disc_loss(logits_real_D, logits_fake_D)  # 判别器 对抗损失
             self.manual_backward(loss_disc)
             self.clip_gradients(opt_disc, 5.0, "norm")
             opt_disc.step()
+        else:
+            loss_disc = torch.tensor(0.0, device=self.device)
         sch_disc.step()
 
+        # ===== 生成器步 =====
         opt_gen.zero_grad()
-        logits_real, fmap_real = self.disc_model(wav)
-        logits_fake, fmap_fake = self.disc_model(x_hat)
+        if use_gan:
+            # GAN 阶段：对 G 的 forward 要用未 detach 的 x_hat
+            logits_real_G, fmap_real_G = self.disc_model(wav)
+            logits_fake_G, fmap_fake_G = self.disc_model(x_hat)
+            _use_gan = True
+            _use_fm  = True     # 你也可以改成 schedule 或权重
+        else:
+            # warm-up之前：完全不 forward 判别器
+            logits_real_G = logits_fake_G = None
+            fmap_real_G   = fmap_fake_G   = None
+            _use_gan = False
+            _use_fm  = False    # 你要求 K 步前不要 FM
+
         losses_g = total_loss(
-            fmap_real=fmap_real,
-            logits_fake=logits_fake,
-            fmap_fake=fmap_fake,
+            fmap_real=fmap_real_G,
+            logits_fake=logits_fake_G,
+            fmap_fake=fmap_fake_G,
             input_wav=wav,
             output_wav=x_hat,
             sample_rate=24000,
+            use_gan=_use_gan, # 如果没有达到discriminator warm up steps 那么 就不用 生成器对抗损失 
+            use_fm=_use_fm,  # 也不用 feature matching loss
         )
 
         loss_gen = (
@@ -437,7 +448,8 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
         opt_gen.step()
         sch_gen.step()
 
-        log_dict = {
+        # ===== log =====
+        self.log_dict({
             "train/generator_total_loss": loss_gen.detach(),
             "train/adv_genloss": self.loss_lambda["adv_genloss"] * losses_g["l_g"].detach(),
             "train/l_feat": self.loss_lambda["l_feat"] * losses_g["l_feat"].detach(),
@@ -446,31 +458,39 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
             "train/commit_loss": self.loss_lambda["commit_loss"] * commit_loss.detach(),
             "train/distill_loss": self.loss_lambda["distill_loss"] * distill_loss.detach(),
             "train/loss_disc": loss_disc.detach(),
-        }
+        }, on_step=True, prog_bar=False, logger=True, sync_dist=True)
 
-        self.log_dict(log_dict, on_step=True, prog_bar=False, logger=True, sync_dist=True)
-        
-        if (self.total_steps % 10 == 0) or (batch_idx == 0):
-            print(f"\n[Step {self.total_steps:>6d}] | ", end="")
-
-            console_order = [
-                "train/generator_total_loss",
-                "train/loss_disc",
-                "train/adv_genloss",
-                "train/l_feat",
-                "train/waveform_loss",
-                "train/ms_mel_loss",
-                "train/commit_loss",
-                "train/distill_loss",
-            ]
+        if (self.global_step % 10 == 0) or (batch_idx == 0):
+            print(f"\n[Step {self.global_step:>6d}] | ", end="")
+            if use_gan:
+                console_order = [
+                    "train/generator_total_loss",
+                    "train/loss_disc",
+                    "train/adv_genloss",
+                    "train/l_feat",
+                    "train/waveform_loss",
+                    "train/ms_mel_loss",
+                    "train/commit_loss",
+                    "train/distill_loss",
+                ]
+            else:
+                # warm-up 阶段（不打印 GAN 项）
+                console_order = [
+                    "train/generator_total_loss",
+                    "train/waveform_loss",
+                    "train/ms_mel_loss",
+                    "train/commit_loss",
+                    "train/distill_loss",
+                ]
 
             console_str = " | ".join(
                 [f"{name.split('/')[-1]}: {log_dict[name].item():8.3f}" for name in console_order]
             )
             print(console_str, flush=True)
-
-        return {"loss_gen": loss_gen.detach(), "loss_disc": loss_disc.detach()}
         
+        
+        return {"loss_gen": loss_gen.detach(), "loss_disc": loss_disc.detach()}
+            
     def test_step(self, batch):
         wav_type, waveform, fs, length, postfix = batch
         codes = self.encode(waveform.unsqueeze(1))

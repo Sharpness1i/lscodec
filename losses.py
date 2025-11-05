@@ -1,44 +1,52 @@
 import torch
 from audio_to_mel import Audio2Mel
 
-def total_loss(fmap_real, logits_fake, fmap_fake, input_wav, output_wav, sample_rate=24000):
-
+def total_loss(
+    fmap_real, logits_fake, fmap_fake,
+    input_wav, output_wav, sample_rate=24000,
+    use_gan=True, use_fm=True,
+):
+    device = input_wav.device
     relu = torch.nn.ReLU()
     l1Loss = torch.nn.L1Loss(reduction='mean')
     l2Loss = torch.nn.MSELoss(reduction='mean')
 
-    l_t = torch.tensor([0.0], device='cuda', requires_grad=True)
-    l_f = torch.tensor([0.0], device='cuda', requires_grad=True)
-    l_g = torch.tensor([0.0], device='cuda', requires_grad=True)
-    l_feat = torch.tensor([0.0], device='cuda', requires_grad=True)
+    # time / freq losses 一直可用
+    l_t = l1Loss(input_wav, output_wav)
 
-    #time domain loss, output_wav is the output of the generator
-    l_t = l1Loss(input_wav, output_wav) 
-
-    #frequency domain loss, window length is 2^i, hop length is 2^i/4, i \in [5,11]. combine l1 and l2 loss
-    # 注意，这是一个multiscale mel loss
-    for i in range(5, 12): # e=5,...,11
-        fft = Audio2Mel(n_fft=2 ** i,win_length=2 ** i, hop_length=(2 ** i) // 4, n_mel_channels=64, sampling_rate=sample_rate)
+    l_f = torch.tensor(0.0, device=device)
+    for i in range(5, 12):
+        fft = Audio2Mel(
+            n_fft=2**i, win_length=2**i, hop_length=(2**i)//4,
+            n_mel_channels=64, sampling_rate=sample_rate
+        )
         l_f = l_f + l1Loss(fft(input_wav), fft(output_wav)) + l2Loss(fft(input_wav), fft(output_wav))
 
-    
-    for tt1 in range(len(fmap_real)): # len(fmap_real) = 3
-        l_g = l_g + torch.mean(relu(1 - logits_fake[tt1])) / len(logits_fake)
-        for tt2 in range(len(fmap_real[tt1])): # len(fmap_real[tt1]) = 5
-            
-            l_feat = l_feat + l1Loss(fmap_real[tt1][tt2], fmap_fake[tt1][tt2]) / torch.mean(torch.abs(fmap_real[tt1][tt2]))
+    # adversarial 与 feature matching 可关
+    if use_gan and (logits_fake is not None):
+        l_g = torch.tensor(0.0, device=device)
+        K_scale = len(logits_fake)
+        for tt1 in range(K_scale):
+            l_g = l_g + torch.mean(relu(1 - logits_fake[tt1]))
+        l_g = l_g / K_scale
+    else:
+        l_g = torch.tensor(0.0, device=device)
 
-    KL_scale = len(fmap_real)*len(fmap_real[0]) # len(fmap_real) == len(fmap_fake) == len(logits_real) == len(logits_fake) == disc.num_discriminators == K
-    l_feat /= KL_scale
-    K_scale = len(fmap_real) # len(fmap_real[0]) = len(fmap_fake[0]) == L
-    l_g /= K_scale
+    if use_fm and (fmap_real is not None) and (fmap_fake is not None):
+        l_feat = torch.tensor(0.0, device=device)
+        KL_scale = len(fmap_real) * len(fmap_real[0])
+        for tt1 in range(len(fmap_real)):
+            for tt2 in range(len(fmap_real[tt1])):
+                # 避免除零
+                denom = torch.mean(torch.abs(fmap_real[tt1][tt2])) + 1e-8
+                l_feat = l_feat + torch.nn.functional.l1_loss(
+                    fmap_real[tt1][tt2], fmap_fake[tt1][tt2], reduction='mean'
+                ) / denom
+        l_feat = l_feat / KL_scale
+    else:
+        l_feat = torch.tensor(0.0, device=device)
 
-    return {
-        'l_t': l_t,
-        'l_f': l_f,
-        'l_g': l_g,
-        'l_feat': l_feat,
-    }
+    return {'l_t': l_t, 'l_f': l_f, 'l_g': l_g, 'l_feat': l_feat}
 
 def disc_loss(logits_real, logits_fake):
 
