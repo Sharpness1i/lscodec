@@ -19,7 +19,7 @@ echo "GPUS_PER_NODE=$GPUS_PER_NODE"
 echo "-----------------------------------------"
 
 
-export HF_ENDPOINT=https://hf-mirror.com && export WAVLM_DIR=/mnt/wavlm_large && export PYTHONPATH=/root/code/lscodec:$PYTHONPATH
+export HF_ENDPOINT=https://hf-mirror.com && export PYTHONPATH=/root/code/lscodec:$PYTHONPATH
 python -m torch.distributed.run \
   --nnodes=$NNODES \
   --nproc_per_node=$GPUS_PER_NODE \
