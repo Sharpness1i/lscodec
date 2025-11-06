@@ -7,6 +7,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from natsort import natsorted
 import subprocess
 import os
+from pytorch_lightning.strategies import DDPStrategy
 from safetensors.torch import save_file
 from dataloader.data_module_parquet import CosyDataModule
 
@@ -80,8 +81,10 @@ def main(args):
         limit_val_batches=0,
         callbacks=[checkpoint_callback],
         logger=logger,
+        #strategy=DDPStrategy(find_unused_parameters=True),
         strategy=strategy,
     )
+    
 
     if config['resume_from_last_ckpt']:
         version_list = [str(p) for p in (Path(config['log_dir']) / 'ckpts').glob('*')]

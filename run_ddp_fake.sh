@@ -1,6 +1,8 @@
+# 伪2节点 
+
 set -e
 NNODES=2            
-GPUS_PER_NODE=8     
+GPUS_PER_NODE=1     
 MASTER_ADDR=$1
 MASTER_PORT=$2
 NODE_RANK=$3

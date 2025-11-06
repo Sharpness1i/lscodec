@@ -1,7 +1,7 @@
 # gpu config
 accelerator: gpu
-num_nodes: 1
-devices: [0,1]
+num_nodes: 2
+devices: 1
 
 
 # log config
