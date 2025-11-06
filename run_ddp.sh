@@ -1,5 +1,5 @@
 set -e
-NNODES=2            
+NNODES=$7        
 GPUS_PER_NODE=8     
 MASTER_ADDR=$1
 MASTER_PORT=$2

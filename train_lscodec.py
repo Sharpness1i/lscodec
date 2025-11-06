@@ -39,9 +39,6 @@ def main(args):
     subprocess.run(['cp', args.config, ckpt_dir])
     subprocess.run(['cp', 'train.py', ckpt_dir])
     
-    local_rank = int(os.environ.get("LOCAL_RANK", 0))
-    device = torch.device(f"cuda:{local_rank}")
-    
     model = loaders.get_lscodec(filename=None, device=None,num_codebooks=16,config=config)
     
     model.train()
@@ -49,8 +46,7 @@ def main(args):
     model.teacher_feature_extractor.eval()  
     for param in model.teacher_feature_extractor.parameters():
         param.requires_grad = False
-    
-    
+
     data_module = CosyDataModule(args)
     checkpoint_callback = ModelCheckpoint(
         dirpath=ckpt_dir,
@@ -62,13 +58,6 @@ def main(args):
         monitor=None,                
         verbose=True,
     )
-
-    if config['num_nodes'] == 1 and len(config['devices']) > 1:
-        strategy = "ddp"
-    elif config['num_nodes'] > 1:
-        strategy = "ddp"
-    else:
-        strategy = "auto"
     
     trainer = pl.Trainer(
         accelerator=config['accelerator'],
@@ -81,8 +70,7 @@ def main(args):
         limit_val_batches=0,
         callbacks=[checkpoint_callback],
         logger=logger,
-        #strategy=DDPStrategy(find_unused_parameters=True),
-        strategy=strategy,
+        strategy='ddp_find_unused_parameters_true',
     )
     
 
