@@ -21,6 +21,8 @@ from ..utils.compile import CUDAGraphed
 from model.criterion import ContrasiveCriterion
 logger = logging.getLogger()
 
+
+
 class CompressionModel(StreamingModule[StateT]):
     """Base API for all compression model that aim at being used as audio tokenizers
     with a language model.
@@ -376,7 +378,7 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
         
     def on_fit_start(self):
         self.total_steps = 0
-    
+        
 
     def training_step(self, batch, batch_idx):
         wav_16k, wav_24k, lengths_16k, lengths_24k = batch['speech_16k'], batch['speech'], batch['speech_16k_lens'], batch['speech_lens']

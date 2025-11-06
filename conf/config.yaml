@@ -1,7 +1,7 @@
 # gpu config
 accelerator: gpu
 num_nodes: 1
-devices: [0,1]
+devices: [0]
 
 
 # log config
@@ -11,9 +11,11 @@ discriminator_start_step: 10
 #resume: /root/code/lscodec/lscodec-checkpoint67.safetensors
 resume: null
 pretrained_pt_path: /root/code/lscodec/pretrained.pt
-every_n_train_steps: 100
+every_n_train_steps: 1000
 # inference
 ckpt_path: null
+
+
 
 # dataset config
 dataset_config:

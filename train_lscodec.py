@@ -7,17 +7,26 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from natsort import natsorted
 import subprocess
 import os
-from pytorch_lightning.strategies import DDPStrategy
-from safetensors.torch import save_file
 from dataloader.data_module_parquet import CosyDataModule
 
 from lscodec.models import loaders
 import os
 import torch
 DEBUG_MODE = os.environ.get("DEBUG_MODE", "false").lower() in ("1", "true", "yes")
+
 if DEBUG_MODE:
     import debugpy; debugpy.listen(('0.0.0.0', 5678)); print('I am waiting for you');debugpy.wait_for_client();debugpy.breakpoint();
 
+class StepCheckpointCallback(pl.Callback):
+    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
+        global_step = trainer.global_step
+        if global_step > 0 and global_step % 300000 == 0 and trainer.is_global_zero:
+            ckpt_path = os.path.join(
+                trainer.checkpoint_callback.dirpath,
+                f"step-{global_step}.ckpt"
+            )
+            print(f" Saving checkpoint at {ckpt_path}")
+            trainer.save_checkpoint(ckpt_path)
 
 
 def save_as_safetensors(checkpoint, path):
@@ -68,7 +77,7 @@ def main(args):
         val_check_interval=None,
         check_val_every_n_epoch=None,
         limit_val_batches=0,
-        callbacks=[checkpoint_callback],
+        callbacks=[checkpoint_callback,StepCheckpointCallback()],
         logger=logger,
         strategy='ddp_find_unused_parameters_true',
     )
