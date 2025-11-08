@@ -233,7 +233,7 @@ class SplitResidualVectorQuantizer(BaseQuantizer):
         renorm_rest_val = rest_val * n_q_acoustic / n_q
         return renorm_first_val + renorm_rest_val
 
-    def forward(self, x: torch.Tensor, teacher_features:torch.Tensor, frame_rate: int):
+    def forward(self, x: torch.Tensor, teacher_features:torch.Tensor, frame_rate: int,start_distill:bool=False):
         """
         Args:
             x (torch.Tensor): Input tensor of shape [B, C, T] with `C` number of channels.
@@ -248,29 +248,27 @@ class SplitResidualVectorQuantizer(BaseQuantizer):
                 - `penalty` (torch.Tensor): Commitment loss.
                 - `metrics` (dict): RVQ metrics, in particular rate of dead code replacement, and entropy.
         """
-        semantic_result = self.rvq_first(x, frame_rate)
-        semantic_embed = self.quantizer_proj(semantic_result.x.transpose(1,2))
+        distill_loss = torch.tensor(0.0).to(x.device)
+        semantic_result = self.rvq_first(x, frame_rate) # 注意：即使不启动distill loss， 也会产生 单码本的commitment loss
         
-        teacher_features_pool = (
-            self.noncausal_avg_pool1d(
-                teacher_features.transpose(1, 2),  # (B, D, T)
-                kernel_size=8,
-                stride=4
-            ).transpose(1, 2)  # 回到 (B, T/4, D)
-     )
-        
-        
-        # if teacher_features_pool.size(1) != teacher_features.size(1):
-        #     teacher_features_pool  = F.adaptive_avg_pool1d(
-        #         teacher_features_pool.transpose(1, 2), output_size=semantic_embed.size(1)
-        #     ).transpose(1, 2) 
-        
-        distill_loss = d_axis_distill_loss(semantic_embed, teacher_features_pool)
+        if start_distill:
+            # 开始动用蒸馏loss
+            semantic_embed = self.quantizer_proj(semantic_result.x.transpose(1,2)) 
+            teacher_features_pool = (
+                self.noncausal_avg_pool1d(
+                    teacher_features.transpose(1, 2),  # (B, D, T)
+                    kernel_size=8,
+                    stride=4
+                ).transpose(1, 2)) # 回到 (B, T/4, D)
+
+            distill_loss = d_axis_distill_loss(semantic_embed, teacher_features_pool)
         
         if self.n_q == self.n_q_semantic:
             return semantic_result
         acoustic_result = self.rvq_rest(x, frame_rate)
+        
         full_quantized_emb = semantic_result.x + acoustic_result.x
+        
         full_quantized_codes = torch.cat(
             [semantic_result.codes, acoustic_result.codes], dim=1
         )

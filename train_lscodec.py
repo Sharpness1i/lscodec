@@ -56,6 +56,9 @@ def main(args):
     for param in model.teacher_feature_extractor.parameters():
         param.requires_grad = False
 
+    
+    strategy = 'ddp_find_unused_parameters_true' if config['devices'] > 1 else 'auto'
+    
     data_module = CosyDataModule(args)
     checkpoint_callback = ModelCheckpoint(
         dirpath=ckpt_dir,
@@ -79,7 +82,7 @@ def main(args):
         limit_val_batches=0,
         callbacks=[checkpoint_callback,StepCheckpointCallback()],
         logger=logger,
-        strategy='ddp_find_unused_parameters_true',
+        strategy=strategy,
     )
     
 

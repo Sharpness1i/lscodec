@@ -1,4 +1,5 @@
 from loss import *
+
 import torch.nn.functional as F
 import pytorch_lightning as pl
 from abc import abstractmethod
@@ -10,7 +11,12 @@ from torch import nn
 from transformers.optimization import get_cosine_schedule_with_warmup
 from transformers import AutoModel
 import os
+from dacdiscriminator_loss import DACDiscriminator
+from model.disc.discriminators import MultiPeriodDiscriminator, MultiResolutionDiscriminator
 import soundfile as sf
+
+from model.criterion import  DiscriminatorLoss, FeatureMatchingLoss, GeneratorLoss, DACGANLoss, MelSpecReconstructionLoss
+
 from losses import disc_loss, total_loss
 WAVLM_DIR= os.environ.get("WAVLM_DIR") 
 from ..quantization import (QuantizedResult,BaseQuantizer,SplitResidualVectorQuantizer,ResidualVectorQuantizer)
@@ -124,12 +130,19 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
         freeze_quantizer: bool = False,
         freeze_quantizer_level: int = -1,
         config: str = None,
-        recon_dir: str = None,
+        recon_dir: str = '/primus_biz_workspace/zhangboyang.zby/lscodec/recon_dir',
         discriminator_start_step: int = 10000,
     ):
         self.recon_dir = recon_dir
         super().__init__()
-        self.disc_model = MultiScaleSTFTDiscriminator(filters=32)
+        
+        self.dac = DACDiscriminator()
+        
+        self.multiperioddisc = MultiPeriodDiscriminator()
+        self.multiresddisc = MultiResolutionDiscriminator()
+        
+        self.dacdiscriminator = DACGANLoss(self.dac)
+
         self.teacher_feature_extractor = AutoModel.from_pretrained(WAVLM_DIR).eval()
         self.teacher_feature_extractor.eval()
         for p in self.teacher_feature_extractor.parameters():
@@ -146,15 +159,13 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
         self.encoder_frame_rate = encoder_frame_rate
         self.automatic_optimization = False
         
-        self.loss_lambda = {
-            "adv_genloss": 2.0,          # 对应 losses_g['l_g']  # 1-3    细粒度 补充
-            "l_feat": 10.0,               # 对应 losses_g['l_feat']    #  中间层次 ；粗粒度
-            "waveform_loss": 0.1,        # 对应 losses_g['l_t']  # 0.1   细粒度
-            "ms_mel_loss": 15.0,          # 对应 losses_g['l_f'] # 粗粒度 补充
-            "commit_loss": 1.0,          # 对应 commit_loss
-            "distill_loss": 10.0,        # 对应 distill_loss
-        }
-   
+        self.feat_matching_loss = FeatureMatchingLoss()
+        self.melspec_loss = MelSpecReconstructionLoss(sample_rate=sample_rate)
+        
+        self.disc_loss = DiscriminatorLoss()
+        self.gen_loss = GeneratorLoss()
+        self.mel_loss_coeff = 45.0
+        self.mrd_loss_coeff = 1.0   
         if freeze_encoder:
             for p in self.encoder.parameters():
                 p.requires_grad = False
@@ -291,7 +302,11 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
             gen_params.append({"params": self.encoder_transformer.parameters()})
         if self.decoder_transformer is not None:
             gen_params.append({"params": self.decoder_transformer.parameters()})
-        disc_params = [{"params": self.disc_model.parameters()}]
+        disc_params = [
+            {"params": self.dac.parameters()},
+            {"params": self.multiperioddisc.parameters()},
+            {"params": self.multiresddisc.parameters()},
+        ]
 
         opt_gen = torch.optim.AdamW(gen_params, self.config['opt_gen']['lr'])
         opt_disc = torch.optim.AdamW(disc_params, self.config['opt_disc']['lr'])
@@ -347,25 +362,26 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
             else:
                 raise ValueError(f"Unsupported quantizer type {type(self.quantizer)}")
 
-        emb = self.encoder(x) # 960倍下采样
+        encoded_out = self.encoder(x) # 960倍下采样
 
         if self.encoder_transformer is not None:
-            (emb,) = self.encoder_transformer(emb) # 时间长度不变
-        emb = self._to_framerate(emb) # 下采样 2倍 ；
+            (encoded_out,) = self.encoder_transformer(encoded_out) # 时间长度不变
+        encoded_out = self._to_framerate(encoded_out) # 下采样 2倍 ；
         expected_length = self.frame_rate * length / self.sample_rate  # 这个expected length 正是 samples // 1920  (符合 frame_rate = 12.5HZ 的长度)
         # Checking that we have the proper length given the advertised frame rate.
-        assert abs(emb.shape[-1] - expected_length) < 1, (
-            emb.shape[-1],
+        assert abs(encoded_out.shape[-1] - expected_length) < 1, (
+            encoded_out.shape[-1],
             expected_length,
         )
-        q_res = self.quantizer(emb,teacher_feature,self.frame_rate)
+        q_res = self.quantizer(encoded_out,teacher_feature,self.frame_rate)
+        
         loss = q_res.penalty
         emb = q_res.x
         emb = self._to_encoder_framerate(emb)
         if self.decoder_transformer is not None:
             (emb,) = self.decoder_transformer(emb)
 
-        out = self.decoder(emb)
+        out = self.decoder(emb) # 这个 emb 是否包含第一个码本的？ look up embedding ？ 
 
         # remove extra padding added by the encoder and decoder
         assert out.shape[-1] >= length, (out.shape[-1], length)
@@ -380,11 +396,11 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
         self.total_steps = 0
         
 
-    def training_step(self, batch, batch_idx):
+    def training_step(self, batch, batch_idx, **kwargs):
         wav_16k, wav_24k, lengths_16k, lengths_24k = batch['speech_16k'], batch['speech'], batch['speech_16k_lens'], batch['speech_lens']
         
         teacher_feature = self.teacher_feature_extractor(wav_16k).last_hidden_state.detach()
- 
+
         if wav_24k.dim() == 2:
             wav_24k = wav_24k.unsqueeze(1)
         wav = pad_for_conv1d(wav_24k, self.frame_size, self.frame_size)
@@ -397,80 +413,106 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
             t = torch.tensor(self.total_steps, device=self.device)
             torch.distributed.broadcast(t, src=0)
             self.total_steps = int(t.item())
-            
+
+        ##########################################
+        # 1. generator forward (保留梯度)
+        ##########################################
         x_hat, commit_loss, distill_loss = self(wav, teacher_feature=teacher_feature)
 
-        # ===== 判别器 =====
+        ##########################################
+        # ✅ 2. 训练 D：重新 forward G + no_grad  （替代 detach）
+        ##########################################
         opt_disc.zero_grad()
-        loss_disc = torch.tensor(0.0, device=self.device)
-        
-        logits_real, fmap_real = self.disc_model(wav)
-        logits_fake, fmap_fake = self.disc_model(x_hat.detach())
-        loss_disc = disc_loss(logits_real, logits_fake)
+
+        with torch.no_grad():  # ⚠ 改动1: 重 forward fake，替代 detach
+            x_hat_d, _, _ = self(wav, teacher_feature=teacher_feature)
+
+        # 所有判别器输入使用 x_hat_d（而不是 detach）
+        loss_dac = self.dacdiscriminator.discriminator_loss(x_hat_d, wav)
+
+        real_score_mp, gen_score_mp, _, _ = self.multiperioddisc(
+            y=wav.squeeze(1), y_hat=x_hat_d.squeeze(1)
+        )
+        real_score_mrd, gen_score_mrd, _, _ = self.multiresddisc(
+            y=wav.squeeze(1), y_hat=x_hat_d.squeeze(1)
+        )
+
+        loss_mp, loss_mp_real, _ = self.disc_loss(
+            disc_real_outputs=real_score_mp, disc_generated_outputs=gen_score_mp
+        )
+        loss_mrd, loss_mrd_real, _ = self.disc_loss(
+            disc_real_outputs=real_score_mrd, disc_generated_outputs=gen_score_mrd
+        )
+        loss_mp /= len(loss_mp_real)
+        loss_mrd /= len(loss_mrd_real)
+
+        loss_disc = loss_mp + loss_mrd + loss_dac
+
         self.manual_backward(loss_disc)
         self.clip_gradients(opt_disc, 5.0, "norm")
         opt_disc.step()
         sch_disc.step()
 
+        ##########################################
+        #  训练 G（保留 D 梯度，但不会更新 D 参数）
+        ##########################################
         opt_gen.zero_grad()
-        logits_real, fmap_real = self.disc_model(wav)
-        logits_fake, fmap_fake = self.disc_model(x_hat)
-        losses_g = total_loss(
-            fmap_real=fmap_real,
-            logits_fake=logits_fake,
-            fmap_fake=fmap_fake,
-            input_wav=wav,
-            output_wav=x_hat,
-            sample_rate=24000,
+
+        # generator 更新时使用首次 G 前向的 x_hat
+        loss_dac_1, loss_dac_2 = self.dacdiscriminator.generator_loss(x_hat, wav)
+
+        _, gen_score_mp, fmap_rs_mp, fmap_gs_mp = self.multiperioddisc(y=wav.squeeze(1), y_hat=x_hat.squeeze(1))
+        _, gen_score_mrd, fmap_rs_mrd, fmap_gs_mrd = self.multiresddisc(y=wav.squeeze(1), y_hat=x_hat.squeeze(1))
+
+        loss_gen_mp, list_loss_gen_mp = self.gen_loss(disc_outputs=gen_score_mp)
+        loss_gen_mrd, list_loss_gen_mrd = self.gen_loss(disc_outputs=gen_score_mrd)
+        loss_gen_mp /= len(list_loss_gen_mp)
+        loss_gen_mrd /= len(list_loss_gen_mrd)
+
+        loss_fm_mp = self.feat_matching_loss(fmap_r=fmap_rs_mp, fmap_g=fmap_gs_mp) / len(fmap_rs_mp)
+        loss_fm_mrd = self.feat_matching_loss(fmap_r=fmap_rs_mrd, fmap_g=fmap_gs_mrd) / len(fmap_rs_mrd)
+
+        mel_loss = self.melspec_loss(x_hat, wav)
+
+        loss_generator = (
+            loss_gen_mp
+            + loss_gen_mrd
+            + loss_fm_mp + loss_fm_mrd
+            + self.mel_loss_coeff * mel_loss
+            + 2.0 * commit_loss
+            + loss_dac_1 + loss_dac_2
         )
 
-        loss_gen = (
-            self.loss_lambda["adv_genloss"] * losses_g["l_g"]
-            + self.loss_lambda["l_feat"] * losses_g["l_feat"]
-            + self.loss_lambda["waveform_loss"] * losses_g["l_t"]
-            + self.loss_lambda["ms_mel_loss"] * losses_g["l_f"]
-            + self.loss_lambda["commit_loss"] * commit_loss
-            + self.loss_lambda["distill_loss"] * distill_loss
-        )
-
-        self.manual_backward(loss_gen)
+        self.manual_backward(loss_generator)
         self.clip_gradients(opt_gen, 5.0, "norm")
         opt_gen.step()
         sch_gen.step()
-
-        log_dict = {
-            "train/generator_total_loss": loss_gen.detach(),
-            "train/adv_genloss": self.loss_lambda["adv_genloss"] * losses_g["l_g"].detach(),
-            "train/l_feat": self.loss_lambda["l_feat"] * losses_g["l_feat"].detach(),
-            "train/waveform_loss": self.loss_lambda["waveform_loss"] * losses_g["l_t"].detach(),
-            "train/ms_mel_loss": self.loss_lambda["ms_mel_loss"] * losses_g["l_f"].detach(),
-            "train/commit_loss": self.loss_lambda["commit_loss"] * commit_loss.detach(),
-            "train/distill_loss": self.loss_lambda["distill_loss"] * distill_loss.detach(),
-            "train/loss_disc": loss_disc.detach(),
-        }
-
-        self.log_dict(log_dict, on_step=True, prog_bar=False, logger=True, sync_dist=True)
         
-        if (self.total_steps % 10 == 0) or (batch_idx == 0):
-            print(f"\n[Step {self.total_steps:>6d}] | ", end="")
+        
+        ##########################################
+        # Logging: D losses
+        ##########################################
+        self.log("D/total", loss_disc, on_step=True, on_epoch=True, prog_bar=True)
+        self.log("D/mpd", loss_mp, on_step=True, on_epoch=True)
+        self.log("D/mrd", loss_mrd, on_step=True, on_epoch=True)
+        self.log("D/dac", loss_dac, on_step=True, on_epoch=True)
 
-            console_order = [
-                "train/generator_total_loss",
-                "train/loss_disc",
-                "train/adv_genloss",
-                "train/l_feat",
-                "train/waveform_loss",
-                "train/ms_mel_loss",
-                "train/commit_loss",
-                "train/distill_loss",
-            ]
+        ##########################################
+        # Logging: G losses
+        ##########################################
+        self.log("G/total", loss_generator, on_step=True, on_epoch=True, prog_bar=True)
+        self.log("G/mpd", loss_gen_mp, on_step=True, on_epoch=True)
+        self.log("G/mrd", loss_gen_mrd, on_step=True, on_epoch=True)
+        self.log("G/fm_mpd", loss_fm_mp, on_step=True, on_epoch=True)
+        self.log("G/fm_mrd", loss_fm_mrd, on_step=True, on_epoch=True)
+        self.log("G/mel", mel_loss, on_step=True, on_epoch=True)
+        self.log("G/commit", commit_loss, on_step=True, on_epoch=True)
+        self.log("G/dac_adv", loss_dac_1, on_step=True, on_epoch=True)
+        self.log("G/dac_fm", loss_dac_2, on_step=True, on_epoch=True)
 
-            console_str = " | ".join(
-                [f"{name.split('/')[-1]}: {log_dict[name].item():8.3f}" for name in console_order]
-            )
-            print(console_str, flush=True)
+        
 
-        return {"loss_gen": loss_gen.detach(), "loss_disc": loss_disc.detach()}
+        return {"loss_gen": loss_generator.detach(), "loss_disc": loss_disc.detach()}
         
     def test_step(self, batch):
         wav_type, waveform, fs, length, postfix = batch

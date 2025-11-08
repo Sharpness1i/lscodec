@@ -443,7 +443,7 @@ class DiscriminatorSTFT(nn.Module):
         z = self.conv_post(z)
         return z, fmap
 
-
+# 这是MRD
 class MultiScaleSTFTDiscriminator(nn.Module):
     """Multi-Scale STFT (MS-STFT) discriminator.
     Args:
@@ -465,6 +465,8 @@ class MultiScaleSTFTDiscriminator(nn.Module):
                               n_fft=n_ffts[i], win_length=win_lengths[i], hop_length=hop_lengths[i], **kwargs)
             for i in range(len(n_ffts))
         ])
+        
+        
         self.num_discriminators = len(self.discriminators)
 
     def forward(self, x: torch.Tensor) -> DiscriminatorOutput:
