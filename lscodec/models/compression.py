@@ -424,7 +424,7 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
         ##########################################
         opt_disc.zero_grad()
 
-        with torch.no_grad():  # ⚠ 改动1: 重 forward fake，替代 detach
+        with torch.no_grad():  # 重 forward fake，替代 detach
             x_hat_d, _, _ = self(wav, teacher_feature=teacher_feature)
 
         # 所有判别器输入使用 x_hat_d（而不是 detach）
