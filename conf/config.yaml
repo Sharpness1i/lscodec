@@ -5,7 +5,7 @@ devices: 1
 
 
 # log config
-log_dir: ./log/log1030
+log_dir: ./log/log1109
 resume_from_last_ckpt: false
 discriminator_start_step: 10
 #resume: /root/code/lscodec/lscodec-checkpoint67.safetensors
@@ -16,53 +16,19 @@ every_n_train_steps: 1000
 ckpt_path: null
 
 
-
 # dataset config
 dataset_config:
   train_kwargs:
-    batch_size: 2
-    cut_duration: [5.0, 5.0]  # 5.0 seconds
+    batch_size: 4
+    cut_duration: 3.0  # 5.0 seconds
     num_workers: 1 # set 1 for debug
     prefetch: 24
     samples_per_epoch: 1000000
-    domain_weights_dict:
-      speech: 2
-      music: 1
-      audio: 1
-    audio_scp_path:
-      - /root/code/lscodec/data_scp/speech.scp
-    music_scp_path:
-      - /root/code/lscodec/data_scp/speech.scp
-    speech_scp_base_dir: /root/code/qwen-omni
     speech_scp_path:
-      - /root/code/lscodec/data_scp/speech.scp
-
-  val_kwargs:
-    batch_size: 1
-    num_workers: 1
-    prefetch: 1
-    cut_duration: [5.0, 5.0]  # 5.0 seconds
-    samples_per_epoch: 1000
-    speech_scp_path: /root/code/lscodec/data_scp/speech.scp
-    music_scp_path: /root/code/lscodec/data_scp/speech.scp
-    audio_scp_path: /root/code/lscodec/data_scp/speech.scp
-  test_kwargs:
-    batch_size: 1
-    num_workers: 1
-    prefetch: 1
-    domain: speech
-    wav_scp_path: /root/code/lscodec/data_scp/speech.scp
+      - /primus_biz_workspace/zhangboyang.zby/data/emilia/train/data.list
 
 
-
-
-# max_epochs: 200
-# val_check_interval: 0.5  # validate every 0.5 epochs
-
-max_steps: 1_200_000  # 1.2M/2 steps
-#val_check_interval: 2_000  # validate every 2k steps
-#check_val_every_n_epoch: null  # validate based on the total training batches
-#limit_val_batches: 600  # 只用 600 个batch来验证
+max_steps: 1_200_000 
 
 
 gradient_clip_val: 5.0
@@ -74,42 +40,7 @@ sch:
   warmup_steps: 0
 perceptual_start_step: 500_000
 
-encoder_config:
-  channels: 1
-  dimension: 512
-  n_filters: 32
-  n_residual_layers: 1
-  ratios: [2, 4, 5, 8]
-  causal: false
-decoder_config:
-  input_channels: 512
-  dim: 768
-  intermediate_dim: 2304
-  convnext_layers: 12
-  n_fft: 1280
-  hop_length: 320  # np.prod(ratios)
-  causal: false
-# quantizer_config:
-#   n_e: 4096
-#   e_dim: 512
-#   legacy: true
-# quantizer_config:
-#   num_quantizers: 1
-#   dim: 512
-#   codebook_size: 8192
-#   codebook_dim: 8
-#   threshold_ema_dead_code: 2
-#   commitment: 0.25
-#   weight_init: false
-#   full_commit_loss: false
-quantizer_config:
-  dim: 512
-  codebook_size: 4096
-  num_quantizers: 1
-  decay: 0.99
-  kmeans_init: true
-  kmeans_iters: 200
-  threshold_ema_dead_code: 2
+
 
 
 contrasive_criterion_config:

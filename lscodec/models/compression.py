@@ -397,7 +397,7 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
         
 
     def training_step(self, batch, batch_idx, **kwargs):
-        wav_16k, wav_24k, lengths_16k, lengths_24k = batch['speech_16k'], batch['speech'], batch['speech_16k_lens'], batch['speech_lens']
+        wav_24k, wav_16k  = batch[0], batch[1]
         
         teacher_feature = self.teacher_feature_extractor(wav_16k).last_hidden_state.detach()
 
@@ -418,6 +418,8 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
         # 1. generator forward (保留梯度)
         ##########################################
         x_hat, commit_loss, distill_loss = self(wav, teacher_feature=teacher_feature)
+
+        # 先把重建损失训好，再考虑蒸馏loss
 
         ##########################################
         # ✅ 2. 训练 D：重新 forward G + no_grad  （替代 detach）
