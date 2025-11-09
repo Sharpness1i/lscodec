@@ -49,7 +49,6 @@ def main(args):
     subprocess.run(['cp', args.config, ckpt_dir])
     
     model = loaders.get_lscodec(filename=None, device=None,num_codebooks=16,config=config)
-    
     model.train()
     
     model.teacher_feature_extractor.eval()  
@@ -69,7 +68,6 @@ def main(args):
         verbose=True,
     )
     
-
     # 命令行传参覆盖yaml
     if args.batch_size is not None:
         config['dataset_config']['train_kwargs']['batch_size'] = args.batch_size
@@ -94,8 +92,6 @@ def main(args):
     )
     trainer.interval_samples = args.interval_samples
     
-    
-
     if config['resume_from_last_ckpt']:
         version_list = [str(p) for p in (Path(config['log_dir']) / 'ckpts').glob('*')]
         version_list = natsorted(version_list, reverse=True)
