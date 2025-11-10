@@ -71,7 +71,6 @@ class TrainDataLoadIter:
         # resample 24k → 16k
         self.resampler = torchaudio.transforms.Resample(24000, 16000)
         
-        
     
     def load_scp_to_list(self, scp_path):
         path_list = []

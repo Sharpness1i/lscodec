@@ -56,7 +56,10 @@ def main(args):
         param.requires_grad = False
 
     # data_module = CosyDataModule(args)
+     
     data_module = DataModule(**config['dataset_config'])
+    
+    data_module.train_kwargs['samples_per_epoch'] = args.samples_per_epoch
     checkpoint_callback = ModelCheckpoint(
         dirpath=ckpt_dir,
         filename="step-{step}",
@@ -114,7 +117,7 @@ if __name__ == "__main__":
     parser.add_argument('--config', type=str, default='/root/code/lscodec/conf/config.yaml')
     parser.add_argument('--cosy_yaml', type=str, default='./conf/config.yaml')
     parser.add_argument('--uio_train_data', type=str, default='/primus_biz_workspace/zhangboyang.zby/data/emilia/train/data.list')
-    
+    parser.add_argument('--samples_per_epoch', type=int, default=1200000)
     parser.add_argument('--batch_size', type=int, default=None)
     parser.add_argument('--num_nodes', type=int, default=None)
     parser.add_argument('--devices', type=int, default=None)

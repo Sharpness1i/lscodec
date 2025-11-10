@@ -1,40 +1,91 @@
-ROOT_DIR=/root/code/lscodec
-GPU_NUM=$1
+MASTER_ADDR=localhost
+MASTER_PORT=29501
+NODE_RANK=0
+NUM_NODES=1
+BATCH_SIZE=4
+SAMPLES_PER_EPOCH=1200000
+DEVICES=8
+INTERVAL_SAMPLES=2000
+CONFIG=""
+COSY_YAML=""
+DATA_LIST=""
+DEBUG_MODE=False
+WAVLM_DIR=""
+CKPT=""
+TIMEOUT=2.0
 
-cd $ROOT_DIR
+while [[ $# -gt 0 ]]; do
+key="$1"
+case $key in
+    --batch_size)
+        BATCH_SIZE="$2"; shift; shift ;;
+    --devices)
+        DEVICES="$2"; shift; shift ;;
+    --interval_samples)
+        INTERVAL_SAMPLES="$2"; shift; shift ;;
+    --node_rank)
+        NODE_RANK="$2"; shift; shift ;;
+    --num_nodes)
+        NUM_NODES="$2"; shift; shift ;;
+    --master_addr)
+        MASTER_ADDR="$2"; shift; shift ;;
+    --master_port)
+        MASTER_PORT="$2"; shift; shift ;;
+    --samples_per_epoch)
+        SAMPLES_PER_EPOCH="$2"; shift; shift ;;
+    --wavlm_dir)
+        WAVLM_DIR="$2"; shift; shift ;;
+    --config)
+        CONFIG="$2"; shift; shift ;;
+    --cosy_yaml)
+        COSY_YAML="$2"; shift; shift ;;
+    --uio_train_data)
+        DATA_LIST="$2"; shift; shift ;;
+    --DEBUG_MODE)
+        DEBUG_MODE="$2"; shift; shift ;;
+    --ckpt)
+        CKPT="$2"; shift; shift ;;
+    *)
+
+        echo "❌ Unknown arg: $1"; exit 1 ;;
+esac
+done
+
+
+echo "MASTER_ADDR     = $MASTER_ADDR"
+echo "MASTER_PORT     = $MASTER_PORT"
+echo "NUM_NODES       = $NUM_NODES"
+echo "NODE_RANK       = $NODE_RANK"
+echo "BATCH_SIZE      = $BATCH_SIZE"
+echo "DEVICES         = $DEVICES"
+echo "INTERVAL_SAMPLES= $INTERVAL_SAMPLES"
+echo "CONFIG          = $CONFIG"
+echo "COSY_YAML       = $COSY_YAML"
+echo "DATA_LIST       = $DATA_LIST"
+echo "DEBUG_MODE       = $DEBUG_MODE"
+echo "WAVLM_DIR       = $WAVLM_DIR"
+echo sample per epoch: $SAMPLES_PER_EPOCH
+echo "=============================="
+
 export HF_ENDPOINT=https://hf-mirror.com
-export MASTER_ADDR="192.168.1.101"
-export MASTER_PORT=12355
-export WORLD_SIZE=8
-export PYTHONPATH=$ROOT_DIR:$ROOT_DIR/src:$PYTHONPATH
 
-export HUBERT_DIR=/root/code/lscodec/bosonai_hubert_base
-
-export WAVLM_DIR=$2
-
-export DEBUG_MODE=$3
-
-config_file=$4
-cosy_yaml=$5
- 
-data_list=$6
-
+export DEBUG_MODE=$DEBUG_MODE
+export WAVLM_DIR=$WAVLM_DIR
 python -m torch.distributed.run \
-  --nproc_per_node=$GPU_NUM \
-  --nnodes=1 \
-  train_lscodec.py \
-  --config $config_file \
-  --cosy_yaml $cosy_yaml \
-  --uio_train_data $data_list \
-  --batch_size 4 \
-  --num_nodes 1 \
-  --devices $GPU_NUM \
-  --interval_samples 2000
-
-
-# bash /root/code/lscodec/a_run/train_run_lscodec.sh 1 /mnt/wavlm_large True /root/code/lscodec/conf/config.yaml /root/code/lscodec/cosy_conf/cosyvoice2_ori.yaml /primus_biz_workspace/zhangboyang.zby/data/emilia/train/data.list
-
-# bash /root/code/lscodec/a_run/train_run_lscodec.sh 2 /mnt/wavlm_large False /root/code/lscodec/conf/config.yaml /root/code/lscodec/cosy_conf/cosyvoice2_ori.yaml /primus_biz_workspace/zhangboyang.zby/data/emilia/train/data.list
+  --nnodes=$NUM_NODES \
+  --node_rank=$NODE_RANK \
+  --nproc_per_node=$DEVICES \
+  --master_addr=$MASTER_ADDR \
+  --master_port=$MASTER_PORT \
+  /root/code/lscodec/train_lscodec.py \
+  --batch_size $BATCH_SIZE \
+  --config $CONFIG \
+  --cosy_yaml $COSY_YAML \
+  --uio_train_data $DATA_LIST \
+  --devices $DEVICES \
+  --interval_samples $INTERVAL_SAMPLES \
+  --samples_per_epoch $SAMPLES_PER_EPOCH \
+  --num_nodes $NUM_NODES
 
 
 
