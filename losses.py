@@ -1,6 +1,36 @@
 import torch
 from audio_to_mel import Audio2Mel
 
+
+
+
+def multiscale_mel_loss(input_wav, output_wav, sample_rate=24000):
+    
+    device = input_wav.device
+    relu = torch.nn.ReLU()
+    l1Loss = torch.nn.L1Loss(reduction='mean')
+    l2Loss = torch.nn.MSELoss(reduction='mean')
+
+    l_f = torch.tensor(0.0, device=device)
+    for i in range(5, 12):
+        fft = Audio2Mel(
+            n_fft=2**i, win_length=2**i, hop_length=(2**i)//4,
+            n_mel_channels=64, sampling_rate=sample_rate
+        )
+        l_f = l_f + l1Loss(fft(input_wav), fft(output_wav)) + l2Loss(fft(input_wav), fft(output_wav))
+    return l_f
+
+def waveform_loss(input_wav, output_wav):
+    device = input_wav.device
+    l1Loss = torch.nn.L1Loss(reduction='mean')
+    l_t = l1Loss(input_wav, output_wav)
+    return l_t
+
+
+
+
+
+
 def total_loss(
     fmap_real, logits_fake, fmap_fake,
     input_wav, output_wav, sample_rate=24000,

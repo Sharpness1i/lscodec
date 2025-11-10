@@ -1,5 +1,5 @@
 from loss import *
-
+from losses import multiscale_mel_loss, waveform_loss
 import torch.nn.functional as F
 import pytorch_lightning as pl
 from abc import abstractmethod
@@ -160,12 +160,17 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
         self.automatic_optimization = False
         
         self.feat_matching_loss = FeatureMatchingLoss()
-        self.melspec_loss = MelSpecReconstructionLoss(sample_rate=sample_rate)
-        
+        #self.melspec_loss = MelSpecReconstructionLoss(sample_rate=sample_rate)
+        self.melspec_loss = multiscale_mel_loss
+        self.waveform_loss = waveform_loss
         self.disc_loss = DiscriminatorLoss()
         self.gen_loss = GeneratorLoss()
-        self.mel_loss_coeff = 45.0
-        self.mrd_loss_coeff = 1.0   
+        self.commit_loss_coeff = config['lambda_kwargs']['commit_loss_coeff']
+        self.mel_loss_coeff = config['lambda_kwargs']['mel_loss_coeff']
+        self.mrd_loss_coeff = config['lambda_kwargs']['mrd_loss_coeff']
+        self.waveform_loss_coeff = config['lambda_kwargs']['waveform_loss_coeff']
+        self.distill_loss_coeff = config['lambda_kwargs'].get('distill_loss_coeff', 0.0)
+        
         if freeze_encoder:
             for p in self.encoder.parameters():
                 p.requires_grad = False
@@ -448,7 +453,7 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
         loss_mp /= len(loss_mp_real)
         loss_mrd /= len(loss_mrd_real)
 
-        loss_disc = loss_mp + loss_mrd + loss_dac
+        loss_disc = loss_mp + self.mrd_loss_coeff*loss_mrd + loss_dac
 
         self.manual_backward(loss_disc)
         self.clip_gradients(opt_disc, 5.0, "norm")
@@ -475,14 +480,19 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
         loss_fm_mrd = self.feat_matching_loss(fmap_r=fmap_rs_mrd, fmap_g=fmap_gs_mrd) / len(fmap_rs_mrd)
 
         mel_loss = self.melspec_loss(x_hat, wav)
+        
+        waveform_loss = self.waveform_loss(x_hat, wav)
 
         loss_generator = (
             loss_gen_mp
-            + loss_gen_mrd
-            + loss_fm_mp + loss_fm_mrd
+            + loss_gen_mrd # mrd_loss_coeff 
+            + loss_fm_mp 
+            + loss_fm_mrd
             + self.mel_loss_coeff * mel_loss
-            + 2.0 * commit_loss
+            + self.commit_loss_coeff * commit_loss
             + loss_dac_1 + loss_dac_2
+            + waveform_loss*self.waveform_loss_coeff
+            + distill_loss*self.distill_loss_coeff
         )
 
         self.manual_backward(loss_generator)
