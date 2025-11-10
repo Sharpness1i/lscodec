@@ -19,14 +19,23 @@ if DEBUG_MODE:
     import debugpy; debugpy.listen(('0.0.0.0', 5678)); print('I am waiting for you');debugpy.wait_for_client();debugpy.breakpoint();
 
 class StepCheckpointCallback(pl.Callback):
+    def __init__(self):
+        super().__init__()
+        self._start_global_step = None
+
+    def on_train_start(self, trainer, pl_module):
+        self._start_global_step = trainer.global_step
+
     def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
-        global_step = trainer.global_step
-        if global_step > 0 and global_step % (trainer.world_size *batch[0].size(0)) == trainer.interval_samples and trainer.is_global_zero:
+        current_step = trainer.global_step - self._start_global_step
+        current_step = current_step / 2
+        samples_seen = current_step  * trainer.world_size * batch[0].size(0)
+        if current_step == trainer.save_ckpt_step and trainer.is_global_zero:
             ckpt_path = os.path.join(
                 trainer.checkpoint_callback.dirpath,
-                f"step-{global_step}.ckpt"
+                f"step-{current_step}.ckpt"
             )
-            print(f" Saving checkpoint at {ckpt_path}")
+            print(f"[CheckpointCallback] Saving checkpoint at {ckpt_path}")
             trainer.save_checkpoint(ckpt_path)
 
 
@@ -60,16 +69,7 @@ def main(args):
     data_module = DataModule(**config['dataset_config'])
     
     data_module.train_kwargs['samples_per_epoch'] = args.samples_per_epoch
-    checkpoint_callback = ModelCheckpoint(
-        dirpath=ckpt_dir,
-        filename="step-{step}",
-        every_n_train_steps=config['every_n_train_steps'], 
-        save_top_k=-1,                
-        save_last=False,
-        save_weights_only=False,     
-        monitor=None,                
-        verbose=True,
-    )
+    
     
     # 命令行传参覆盖yaml
     if args.batch_size is not None:
@@ -81,6 +81,19 @@ def main(args):
 
     strategy = 'ddp_find_unused_parameters_true' if config['devices'] > 1 else 'auto'
     
+    save_steps = config['every_n_train_steps']
+     
+    # checkpoint_callback = ModelCheckpoint(
+    #     dirpath=ckpt_dir,
+    #     filename="step-{step:06d}",
+    #     every_n_train_steps=save_steps, 
+    #     save_top_k=-1,                
+    #     save_last=False,
+    #     save_weights_only=False,     
+    #     monitor=None,                
+    #     verbose=True,
+    # )
+    
     trainer = pl.Trainer(
         accelerator=config['accelerator'],
         num_nodes=config['num_nodes'],
@@ -89,11 +102,11 @@ def main(args):
         max_steps=config['max_steps'] if 'max_steps' in config else None,
         check_val_every_n_epoch=None,
         limit_val_batches=0,
-        callbacks=[checkpoint_callback,StepCheckpointCallback()],
+        callbacks=[StepCheckpointCallback()],
         logger=logger,
         strategy=strategy,
     )
-    trainer.interval_samples = args.interval_samples
+    trainer.save_ckpt_step = args.save_ckpt_step
     
     if config['resume_from_last_ckpt']:
         version_list = [str(p) for p in (Path(config['log_dir']) / 'ckpts').glob('*')]
@@ -121,7 +134,7 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', type=int, default=None)
     parser.add_argument('--num_nodes', type=int, default=None)
     parser.add_argument('--devices', type=int, default=None)
-    parser.add_argument('--interval_samples', type=int, default=None)
+    parser.add_argument('--save_ckpt_step', type=int, default=None)
     
     
     args = parser.parse_args()

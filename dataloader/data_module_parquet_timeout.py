@@ -32,7 +32,7 @@ class TrainDataLoadIter:
         cut_duration: Union[float, List[float]] = 5.0,
         num_workers: int = 1,
         prefetch: int = 0,
-        interval_samples: int = 16000,
+        save_ckpt_step: int = 16000,
         samples_per_epoch: int = 10000,
     ):  
         if dist.is_initialized():

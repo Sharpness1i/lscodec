@@ -1,11 +1,12 @@
-MASTER_ADDR=localhost
+echo "[DEBUG ARGS] $@"
 MASTER_PORT=29501
+MASTER_ADDR=localhost
 NODE_RANK=0
 NUM_NODES=1
 BATCH_SIZE=4
 SAMPLES_PER_EPOCH=1200000
 DEVICES=8
-INTERVAL_SAMPLES=2000
+save_ckpt_step=1000
 CONFIG=""
 COSY_YAML=""
 DATA_LIST=""
@@ -13,7 +14,7 @@ DEBUG_MODE=False
 WAVLM_DIR=""
 CKPT=""
 TIMEOUT=2.0
-
+echo "[DEBUG ARGS] $@"
 while [[ $# -gt 0 ]]; do
 key="$1"
 case $key in
@@ -21,8 +22,8 @@ case $key in
         BATCH_SIZE="$2"; shift; shift ;;
     --devices)
         DEVICES="$2"; shift; shift ;;
-    --interval_samples)
-        INTERVAL_SAMPLES="$2"; shift; shift ;;
+    --save_ckpt_step)
+        save_ckpt_step="$2"; shift; shift ;;
     --node_rank)
         NODE_RANK="$2"; shift; shift ;;
     --num_nodes)
@@ -58,7 +59,7 @@ echo "NUM_NODES       = $NUM_NODES"
 echo "NODE_RANK       = $NODE_RANK"
 echo "BATCH_SIZE      = $BATCH_SIZE"
 echo "DEVICES         = $DEVICES"
-echo "INTERVAL_SAMPLES= $INTERVAL_SAMPLES"
+echo "save_ckpt_step= $save_ckpt_step"
 echo "CONFIG          = $CONFIG"
 echo "COSY_YAML       = $COSY_YAML"
 echo "DATA_LIST       = $DATA_LIST"
@@ -68,6 +69,8 @@ echo sample per epoch: $SAMPLES_PER_EPOCH
 echo "=============================="
 
 export HF_ENDPOINT=https://hf-mirror.com
+
+
 
 export DEBUG_MODE=$DEBUG_MODE
 export WAVLM_DIR=$WAVLM_DIR
@@ -83,7 +86,7 @@ python -m torch.distributed.run \
   --cosy_yaml $COSY_YAML \
   --uio_train_data $DATA_LIST \
   --devices $DEVICES \
-  --interval_samples $INTERVAL_SAMPLES \
+  --save_ckpt_step $save_ckpt_step \
   --samples_per_epoch $SAMPLES_PER_EPOCH \
   --num_nodes $NUM_NODES
 

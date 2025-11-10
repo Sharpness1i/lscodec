@@ -28,3 +28,5 @@ fastapi-cli==0.0.4
 WeTextProcessing==1.0.3
 validators
 loguru
+einx
+pesq
