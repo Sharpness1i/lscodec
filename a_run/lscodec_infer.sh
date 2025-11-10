@@ -7,7 +7,7 @@ export PYTHONPATH=/root/code/lscodec:$PYTHONPATH
 
 ckpt=$3
 
-python /root/code/lscodec/test_lscodec.py --config /primus_biz_workspace/zhangboyang.zby/lscodec/conf/config.yaml --save_enhanced $ckpt
+python /root/code/lscodec/test_lscodec.py --config /primus_biz_workspace/zhangboyang.zby/lscodec/conf/config.yaml --save_enhanced $ckpt --recon_dir $4
 
 
 

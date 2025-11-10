@@ -21,12 +21,14 @@ def main(args):
     
     with open(args.config, 'r') as f:
         config = yaml.safe_load(f)
-    
 
     if args.save_enhanced is not None:
         config['save_enhanced'] = args.save_enhanced
         Path(args.save_enhanced).parent.mkdir(parents=True, exist_ok=True)
 
+    if args.recon_dir is not None:
+        config['recon_dir'] = args.recon_dir # 命令行覆盖 yaml
+    
     model = loaders.get_lscodec(filename=config['save_enhanced'], device=None, num_codebooks=16,config=config)
 
     model.eval()
