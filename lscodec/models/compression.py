@@ -563,13 +563,15 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
         save_path = os.path.join(self.recon_dir, recon_name)
         fs = int(fs.item()) if isinstance(fs, torch.Tensor) else int(fs)
 
-        wav_to_save = reconstructed_wav.squeeze().detach().cpu().numpy()
+        wav_to_save = reconstructed_wav.squeeze()
 
         if wav_to_save.ndim == 3:
             wav_to_save = wav_to_save[0]
         
         if wav_to_save.ndim == 1:
             wav_to_save = wav_to_save.unsqueeze(0)
+        
+        wav_to_save = wav_to_save.detach().cpu()
         
         torchaudio.save(save_path, wav_to_save, sample_rate=fs)
 

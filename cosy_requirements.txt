@@ -30,3 +30,6 @@ validators
 loguru
 einx
 pesq
+transformers==4.48.3
+funasr
+zhon
