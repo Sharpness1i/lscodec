@@ -3,6 +3,9 @@ accelerator: gpu
 num_nodes: 1
 devices: 1
 
+use_distill: false
+recon_dir: /primus_biz_workspace/zhangboyang.zby/lscodec/recon_dir
+
 lambda_kwargs:
   commit_loss_coeff: 10.0
   mel_loss_coeff: 45.0

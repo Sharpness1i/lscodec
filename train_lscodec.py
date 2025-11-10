@@ -50,10 +50,10 @@ def main(args):
     
     model = loaders.get_lscodec(filename=None, device=None,num_codebooks=16,config=config)
     model.train()
-    
-    model.teacher_feature_extractor.eval()  
-    for param in model.teacher_feature_extractor.parameters():
-        param.requires_grad = False
+    if config.get('use_distill'):
+        model.teacher_feature_extractor.eval()  
+        for param in model.teacher_feature_extractor.parameters():
+            param.requires_grad = False
 
     # data_module = CosyDataModule(args)
      

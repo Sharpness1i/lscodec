@@ -47,6 +47,7 @@ def main(args):
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument('--config', type=str, default='./conf/config.yaml')
+    parser.add_argument('--recon_dir', type=str, default=None, help='Path to recon_dir')
     parser.add_argument('--save_enhanced', type=str, default=None, help='The dir path to save enhanced wavs.')
     args = parser.parse_args()
     main(args)

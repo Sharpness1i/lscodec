@@ -107,28 +107,6 @@ class _lscodecState(State):
 
 
 class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
-    """lscodec model operating on the raw waveform.
-
-    Args:
-        encoder (nn.Module): Encoder network.
-        decoder (nn.Module): Decoder network.
-        quantizer (qt.BaseQuantizer): Quantizer network.
-        frame_rate (float): Final frame rate of the quantized representatiopn.
-        encoder_frame_rate (float): frame rate of the encoder model. Note that if `frame_rate != encopder_frame_rate`,
-            the latent will be resampled linearly to match the desired `frame_rate` before and after quantization.
-        sample_rate (int): Audio sample rate.
-        channels (int): Number of audio channels.
-        causal (bool): Whether to use a causal version of the model.
-        encoder_transformer (nn.Module or None): optional transformer for the encoder.
-        decoder_transformer (nn.Module or None): optional transformer for the decoder.
-        resample_method (str): method to use for resampling the latent space before the quantizer.
-        upsample_channel_wise_bug (bool): controls whether the upsampling is channel wise.
-            Defaults to true to reproduce bug in original implementation.
-        freeze_encoder: whether to freeze the encoder weights.
-        freeze_quantizer: whether to freeze the quantizer weights.
-        freeze_quantizer_level: If positive, freeze the quantizer up to this level.
-    """
-
     def __init__(
         self,
         encoder: nn.Module,
@@ -147,12 +125,12 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
         freeze_quantizer: bool = False,
         freeze_quantizer_level: int = -1,
         config: str = None,
-        recon_dir: str = '/primus_biz_workspace/zhangboyang.zby/lscodec/recon_dir',
         discriminator_start_step: int = 10000,
     ):
-        self.recon_dir = recon_dir
+        
         super().__init__()
         
+        self.recon_dir = config['recon_dir']
         self.dac = DACDiscriminator()
         
         self.multiperioddisc = MultiPeriodDiscriminator()
@@ -160,10 +138,13 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
         
         self.dacdiscriminator = DACGANLoss(self.dac)
 
-        self.teacher_feature_extractor = AutoModel.from_pretrained(WAVLM_DIR).eval()
-        self.teacher_feature_extractor.eval()
-        for p in self.teacher_feature_extractor.parameters():
-            p.requires_grad = False
+        if config['use_distill']:
+        
+            self.teacher_feature_extractor = AutoModel.from_pretrained(WAVLM_DIR).eval()
+            self.teacher_feature_extractor.eval()
+            for p in self.teacher_feature_extractor.parameters():
+                p.requires_grad = False
+        self.use_distill = config['use_distill']
         self.config = config
         self.encoder = encoder
         self.decoder = decoder
@@ -395,7 +376,11 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
             encoded_out.shape[-1],
             expected_length,
         )
-        q_res = self.quantizer(encoded_out,teacher_feature,self.frame_rate)
+        if teacher_feature is None:
+            start_distill = False
+        else:
+            start_distill = True
+        q_res = self.quantizer(encoded_out,teacher_feature,self.frame_rate,start_distill=start_distill)
         
         loss = q_res.penalty
         emb = q_res.x
@@ -420,9 +405,11 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
 
     def training_step(self, batch, batch_idx, **kwargs):
         wav_24k, wav_16k  = batch[0], batch[1]
+        if self.use_distill:
+            teacher_feature = self.teacher_feature_extractor(wav_16k).last_hidden_state.detach()
+        else:
+            teacher_feature = None
         
-        teacher_feature = self.teacher_feature_extractor(wav_16k).last_hidden_state.detach()
-
         if wav_24k.dim() == 2:
             wav_24k = wav_24k.unsqueeze(1)
         wav = pad_for_conv1d(wav_24k, self.frame_size, self.frame_size)
@@ -444,7 +431,7 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
         # 先把重建损失训好，再考虑蒸馏loss
 
         ##########################################
-        # ✅ 2. 训练 D：重新 forward G + no_grad  （替代 detach）
+        #  训练 D：重新 forward G + no_grad
         ##########################################
         opt_disc.zero_grad()
 
@@ -540,28 +527,28 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
         self.log("G/dac_fm", loss_dac_2, on_step=True, on_epoch=True)
 
         
-        if self.global_step % 1000 == 0 and self.global_rank == 0:
-                self.logger.experiment.add_audio(
-                    "train/audio_in", wav.data.cpu(), self.global_step, self.hparams.sample_rate
-                )
-                self.logger.experiment.add_audio(
-                    "train/audio_pred", x_hat.cpu(), self.global_step, self.hparams.sample_rate
-                )
-                with torch.no_grad():
-                    mel = safe_log(self.melspec_loss.mel_spec(wav))
-                    mel_hat = safe_log(self.melspec_loss.mel_spec(x_hat))
-                self.logger.experiment.add_image(
-                    "train/mel_target",
-                    plot_spectrogram_to_numpy(mel.data.cpu().numpy()),
-                    self.global_step,
-                    dataformats="HWC",
-                )
-                self.logger.experiment.add_image(
-                    "train/mel_pred",
-                    plot_spectrogram_to_numpy(mel_hat.data.cpu().numpy()),
-                    self.global_step,
-                    dataformats="HWC",
-                )
+        # if self.global_step % 1000 == 0 and self.global_rank == 0:
+        #         self.logger.experiment.add_audio(
+        #             "train/audio_in", wav.data.cpu(), self.global_step, self.hparams.sample_rate
+        #         )
+        #         self.logger.experiment.add_audio(
+        #             "train/audio_pred", x_hat.cpu(), self.global_step, self.hparams.sample_rate
+        #         )
+        #         with torch.no_grad():
+        #             mel = safe_log(self.melspec_loss.mel_spec(wav))
+        #             mel_hat = safe_log(self.melspec_loss.mel_spec(x_hat))
+        #         self.logger.experiment.add_image(
+        #             "train/mel_target",
+        #             plot_spectrogram_to_numpy(mel.data.cpu().numpy()),
+        #             self.global_step,
+        #             dataformats="HWC",
+        #         )
+        #         self.logger.experiment.add_image(
+        #             "train/mel_pred",
+        #             plot_spectrogram_to_numpy(mel_hat.data.cpu().numpy()),
+        #             self.global_step,
+        #             dataformats="HWC",
+        #         )
         
         return {"loss_gen": loss_generator.detach(), "loss_disc": loss_disc.detach()}
         
