@@ -14,7 +14,7 @@ import os
 from dacdiscriminator_loss import DACDiscriminator
 from model.disc.discriminators import MultiPeriodDiscriminator, MultiResolutionDiscriminator
 import soundfile as sf
-
+import numpy as np
 from model.criterion import  DiscriminatorLoss, FeatureMatchingLoss, GeneratorLoss, DACGANLoss, MelSpecReconstructionLoss
 
 from losses import disc_loss, total_loss
@@ -27,7 +27,24 @@ from ..utils.compile import CUDAGraphed
 from model.criterion import ContrasiveCriterion
 logger = logging.getLogger()
 
-
+def safe_log(x: torch.Tensor, clip_val: float = 1e-7) -> torch.Tensor:
+    return torch.log(torch.clip(x, min=clip_val))
+def save_figure_to_numpy(fig: plt.Figure) -> np.ndarray:
+    data = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep="")
+    data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+    return data
+def plot_spectrogram_to_numpy(spectrogram: np.ndarray) -> np.ndarray:
+    spectrogram = spectrogram.astype(np.float32)
+    fig, ax = plt.subplots(figsize=(12, 3))
+    im = ax.imshow(spectrogram, aspect="auto", origin="lower", interpolation="none")
+    plt.colorbar(im, ax=ax)
+    plt.xlabel("Frames")
+    plt.ylabel("Channels")
+    plt.tight_layout()
+    fig.canvas.draw()
+    data = save_figure_to_numpy(fig)
+    plt.close()
+    return data
 
 class CompressionModel(StreamingModule[StateT]):
     """Base API for all compression model that aim at being used as audio tokenizers
@@ -485,9 +502,9 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
 
         loss_generator = (
             loss_gen_mp
-            + loss_gen_mrd # mrd_loss_coeff 
+            + loss_gen_mrd*self.mrd_loss_coeff # mrd_loss_coeff 
             + loss_fm_mp 
-            + loss_fm_mrd
+            + loss_fm_mrd*self.mrd_loss_coeff
             + self.mel_loss_coeff * mel_loss
             + self.commit_loss_coeff * commit_loss
             + loss_dac_1 + loss_dac_2
@@ -523,7 +540,29 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
         self.log("G/dac_fm", loss_dac_2, on_step=True, on_epoch=True)
 
         
-
+        if self.global_step % 1000 == 0 and self.global_rank == 0:
+                self.logger.experiment.add_audio(
+                    "train/audio_in", wav.data.cpu(), self.global_step, self.hparams.sample_rate
+                )
+                self.logger.experiment.add_audio(
+                    "train/audio_pred", x_hat.cpu(), self.global_step, self.hparams.sample_rate
+                )
+                with torch.no_grad():
+                    mel = safe_log(self.melspec_loss.mel_spec(wav))
+                    mel_hat = safe_log(self.melspec_loss.mel_spec(x_hat))
+                self.logger.experiment.add_image(
+                    "train/mel_target",
+                    plot_spectrogram_to_numpy(mel.data.cpu().numpy()),
+                    self.global_step,
+                    dataformats="HWC",
+                )
+                self.logger.experiment.add_image(
+                    "train/mel_pred",
+                    plot_spectrogram_to_numpy(mel_hat.data.cpu().numpy()),
+                    self.global_step,
+                    dataformats="HWC",
+                )
+        
         return {"loss_gen": loss_generator.detach(), "loss_disc": loss_disc.detach()}
         
     def test_step(self, batch):
