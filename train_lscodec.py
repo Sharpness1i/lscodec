@@ -28,12 +28,12 @@ class StepCheckpointCallback(pl.Callback):
 
     def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
         current_step = trainer.global_step - self._start_global_step
-        current_step = current_step / 2
+        current_step = int(current_step) / 2
         samples_seen = current_step  * trainer.world_size * batch[0].size(0)
         if current_step == trainer.save_ckpt_step and trainer.is_global_zero:
             ckpt_path = os.path.join(
                 trainer.checkpoint_callback.dirpath,
-                f"step-{current_step}.ckpt"
+                f"{trainer.current_epoch}-step-{current_step}.ckpt"
             )
             print(f"[CheckpointCallback] Saving checkpoint at {ckpt_path}")
             trainer.save_checkpoint(ckpt_path)

@@ -2,7 +2,7 @@ bash /root/code/lscodec/a_run/train_run_lscodec.sh \
   --batch_size 24 \
   --devices 1 \
   --num_nodes 1 \
-  --save_ckpt_step 2000 \
+  --save_ckpt_step 5 \
   --config /root/code/lscodec/conf/config.yaml \
   --cosy_yaml /root/code/lscodec/cosy_conf/cosyvoice2_ori.yaml \
   --uio_train_data /primus_biz_workspace/zhangboyang.zby/data/emilia/train/data.list \
