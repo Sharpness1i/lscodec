@@ -347,6 +347,33 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
             "world_size": world_size,
             "total_samples": total_samples
         }
+        
+    def on_fit_start(self):
+        if hasattr(self, "_resume_state"):
+            state = self._resume_state
+            
+            # Restore optimizer
+            for opt, sd in zip(self.trainer.optimizers, state["optimizer_states"]):
+                opt.load_state_dict(sd) # 就地 in-place 加载现有 resume的 optimizer 对象的内部状态
+
+            # Restore scheduler
+            for cfg, sd in zip(self.trainer.strategy.lr_scheduler_configs, state["lr_schedulers"]):
+                cfg.scheduler.load_state_dict(sd) # 就地 in-place 加载现有 resume的 scheduler 对象的内部状态
+
+            resume_epoch = state.get("epoch", 0)
+            
+            self.trainer.fit_loop.current_epoch = resume_epoch
+
+            # --- restore global step ---
+            resume_step = state.get("global_step", 0)
+            self.trainer.fit_loop.epoch_loop._batches_that_stepped = resume_step
+            self.trainer.fit_loop._total_batch_idx = resume_step
+
+            # also sync your own custom count
+            self.total_steps = resume_step  
+
+            print(f"[Resume] restored: step={resume_step}, epoch={resume_epoch}")
+            del self._resume_state
     
 
     def forward(self, x ,teacher_feature=None) -> QuantizedResult:
@@ -399,10 +426,7 @@ class lscodecModel(pl.LightningModule, CompressionModel[_lscodecState]):
         
         return recon,loss,q_res.distill_loss
         
-    def on_fit_start(self):
-        self.total_steps = 0
         
-
     def training_step(self, batch, batch_idx, **kwargs):
         wav_24k, wav_16k  = batch[0], batch[1]
         if self.use_distill:

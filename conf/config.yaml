@@ -15,13 +15,13 @@ lambda_kwargs:
 
 
 # log config
-log_dir: ./log/log1109
-resume_from_last_ckpt: false
+log_dir: ./log/log1111
+resume_from_last_ckpt: true
 discriminator_start_step: 10
 #resume: /root/code/lscodec/lscodec-checkpoint67.safetensors
 resume: null
 pretrained_pt_path: /root/code/lscodec/pretrained.pt
-every_n_train_steps: 1000
+every_n_train_steps: 50
 # inference
 ckpt_path: null
 
