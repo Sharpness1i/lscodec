@@ -83,16 +83,16 @@ def main(args):
     
     save_steps = config['every_n_train_steps']
      
-    # checkpoint_callback = ModelCheckpoint(
-    #     dirpath=ckpt_dir,
-    #     filename="step-{step:06d}",
-    #     every_n_train_steps=save_steps, 
-    #     save_top_k=-1,                
-    #     save_last=False,
-    #     save_weights_only=False,     
-    #     monitor=None,                
-    #     verbose=True,
-    # )
+    checkpoint_callback = ModelCheckpoint(
+        dirpath=ckpt_dir,
+        filename="step-{step:06d}",
+        every_n_train_steps=save_steps, 
+        save_top_k=-1,                
+        save_last=False,
+        save_weights_only=False,     
+        monitor=None,                
+        verbose=True,
+    )
     
     trainer = pl.Trainer(
         accelerator=config['accelerator'],
@@ -102,7 +102,8 @@ def main(args):
         max_steps=config['max_steps'] if 'max_steps' in config else None,
         check_val_every_n_epoch=None,
         limit_val_batches=0,
-        callbacks=[StepCheckpointCallback()],
+        #callbacks=[ checkpoint_callback,StepCheckpointCallback()],
+        callbacks=[checkpoint_callback],
         logger=logger,
         strategy=strategy,
     )
